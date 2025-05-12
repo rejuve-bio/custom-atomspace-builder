@@ -416,7 +416,7 @@ async def generate_graph_info(job_id: str) -> dict:
         "edge_count": total_edges,
         "dataset_count": dataset_count,
         "data_size": humanize.naturalsize(dir_size),
-        "imported_on": datetime.now().strftime("%d-%B-%Y"),
+        "imported_on": datetime.now(),
         "top_entities": top_entities,
         "top_connections": top_connections,
         "frequent_relationships": [
@@ -670,8 +670,8 @@ def get_latest_job_dir(output_base_dir: str = BASE_OUTPUT_DIR) -> Optional[str]:
     job_dirs.sort(key=os.path.getmtime, reverse=True)
     return job_dirs[0]
 
-@app.get("/api/graph-info/{job_id}", response_class=JSONResponse)
-@app.get("/api/graph-info/", response_class=JSONResponse)  # Add this route for empty job_id
+@app.get("/api/kg-info/{job_id}", response_class=JSONResponse)
+@app.get("/api/kg-info/", response_class=JSONResponse)  # Add this route for empty job_id
 async def get_graph_info(job_id: str = None):
     """
     Get comprehensive graph information:
