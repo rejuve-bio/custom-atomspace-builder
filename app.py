@@ -416,7 +416,7 @@ async def generate_graph_info(job_id: str) -> dict:
         "edge_count": total_edges,
         "dataset_count": dataset_count,
         "data_size": humanize.naturalsize(dir_size),
-        "imported_on": datetime.now(),
+        "imported_on": str(datetime.now()),
         "top_entities": top_entities,
         "top_connections": top_connections,
         "frequent_relationships": [
