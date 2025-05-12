@@ -14,6 +14,7 @@ import uuid
 import zipfile
 import io
 import humanize
+import httpx
 
 app = FastAPI(title="HugeGraph Loader API")
 
@@ -32,6 +33,8 @@ HUGEGRAPH_HOST = "localhost"
 HUGEGRAPH_PORT = "8080"
 HUGEGRAPH_GRAPH = "hugegraph"
 BASE_OUTPUT_DIR = os.path.abspath("./output")
+ANNOTATION_SERVICE_URL = "http://100.67.47.42:5800/annotation/load"
+ANNOTATION_SERVICE_TIMEOUT = 300.0  # seconds
 
 
 # Schema Models
@@ -461,6 +464,40 @@ def generate_annotation_schema(schema_data: dict) -> dict:
     
     return annotation_schema
 
+async def notify_annotation_service(job_id: str) -> Dict[str, Any]:
+    """
+    Notify the annotation service about the new graph data.
+    
+    Args:
+        job_id: The job ID (used as folder_id in the annotation service)
+        metadata: The metadata dictionary to update with any warnings
+        
+    Returns:
+        Updated metadata dictionary
+    """
+    payload = {"folder_id": job_id}
+    error_msg = None
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                ANNOTATION_SERVICE_URL,
+                json=payload,
+                timeout=ANNOTATION_SERVICE_TIMEOUT
+            )
+            
+            if response.status_code != 200:
+                error_msg = f"Annotation service returned {response.status_code}: {response.text}"
+                print(f"Warning: {error_msg}")
+                
+    except httpx.TimeoutException:
+        error_msg = "Timeout connecting to annotation service"
+        print(f"Warning: {error_msg}")
+    except Exception as e:
+        error_msg = f"Failed to connect to annotation service: {str(e)}"
+        print(f"Warning: {error_msg}")
+    
+    return error_msg
+
 @app.post("/api/load", response_model=HugeGraphLoadResponse)
 async def load_data(
     files: List[UploadFile] = File(...),
@@ -571,6 +608,17 @@ async def load_data(
             save_graph_info(job_id, graph_info)
             output_filenames.append("graph_info.json")
 
+            # Notify annotation service
+            error_msg = await notify_annotation_service(job_id)
+            if error_msg:
+                raise HTTPException(
+                    status_code=500,
+                    detail={
+                        "message": error_msg,
+                        "job_id": job_id
+                    }
+                )
+
             return HugeGraphLoadResponse(
                 job_id=job_id,
                 status="success",
@@ -585,7 +633,6 @@ async def load_data(
         raise HTTPException(status_code=400, detail=f"Invalid JSON: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
-
 
 @app.get("/api/output/{job_id}")
 async def get_output(job_id: str):
