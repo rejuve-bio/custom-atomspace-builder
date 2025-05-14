@@ -314,6 +314,17 @@ def save_graph_info(job_id: str, graph_info: dict):
     """Save graph info to a JSON file for caching"""
     output_dir = get_job_output_dir(job_id)
     info_path = os.path.join(output_dir, "graph_info.json")
+    # also append it on the histroy.json which is on the BASE_OUTPUT_DIR
+    history_path = os.path.join(BASE_OUTPUT_DIR, "history.json")
+    if os.path.exists(history_path):
+        with open(history_path, 'r') as f:
+            history = json.load(f)
+    else:
+        history = {"selected_job_id":"", "history": []}
+    # add it in front
+    history["history"] = [graph_info] + history["history"]
+    with open(history_path, 'w') as f:
+        json.dump(history, f, indent=2)
     with open(info_path, 'w') as f:
         json.dump(graph_info, f, indent=2)
 
@@ -734,6 +745,21 @@ async def select_job(job_id: str):
     
     return {"message": f"Job ID {job_id} selected successfully"}
 
+@app.get("/api/history", response_class=JSONResponse)
+async def get_history():
+    """
+    Retrieve the history of loaded jobs from history.json in the BASE_outputdir.
+    
+    Returns:
+        List of job history items
+    """
+    history_path = os.path.join(BASE_OUTPUT_DIR, "history.json")
+    if not os.path.exists(history_path):
+        raise HTTPException(status_code=404, detail="No job history found")
+    with open(history_path, 'r') as f:
+        history = json.load(f)
+    history["selected_job_id"] = get_job_id_to_use()
+    return history
 
 @app.get("/api/output/{job_id}")
 async def get_output(job_id: str):
