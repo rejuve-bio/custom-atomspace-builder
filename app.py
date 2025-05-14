@@ -81,6 +81,8 @@ class HugeGraphLoadResponse(BaseModel):
     schema_path: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = None
 
+class JobSelectionRequest(BaseModel):
+    job_id: str
 
 def json_to_groovy(schema_json: Union[Dict, SchemaDefinition]) -> str:
     """
@@ -724,25 +726,28 @@ async def load_data(
         shutil.rmtree(output_dir, ignore_errors=True)
         raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
 
-@app.get("/api/select-job/{job_id}")
-async def select_job(job_id: str):
+@app.post("/api/select-job")
+async def select_job(request: JobSelectionRequest):
     """
     Select a job ID for future requests.
-    
+
     Args:
-        job_id: The job ID to select
-        
+        request: JSON body with job_id
+
     Returns:
         Confirmation message
     """
+    job_id = request.job_id
+
     if not os.path.exists(get_job_output_dir(job_id)):
         raise HTTPException(status_code=404, detail=f"Job ID {job_id} does not exist")
     
     error_msg = await notify_annotation_service(job_id)
     if error_msg:
         raise HTTPException(status_code=500, detail=f"Error connecting annotation service: {error_msg}")
-    save_selected_job_id(job_id)
     
+    save_selected_job_id(job_id)
+
     return {"message": f"Job ID {job_id} selected successfully"}
 
 @app.get("/api/history", response_class=JSONResponse)
