@@ -59,6 +59,8 @@ public class MeTTaWriter {
         String id = vertex.id().toString();
         String label = vertex.label();
         Map<String, Object> properties = vertex.properties();
+        // remove the id property from the properties map
+        properties.remove("id");
         
         StringBuilder result = new StringBuilder();
         result.append("(").append(label).append(" ").append(id).append(")");
