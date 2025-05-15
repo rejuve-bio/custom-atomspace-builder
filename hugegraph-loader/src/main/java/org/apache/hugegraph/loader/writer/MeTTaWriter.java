@@ -129,6 +129,8 @@ public class MeTTaWriter {
         String targetLabel = edge.targetLabel();
         String label = edge.label();
         Map<String, Object> properties = edge.properties();
+        // remove the id property from the properties map
+        properties.remove("id");
         
         StringBuilder result = new StringBuilder();
         result.append("(").append(label).append(" (").append(sourceLabel).append(" ").append(sourceId).append(") ")
