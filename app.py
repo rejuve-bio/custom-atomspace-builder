@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Dict, List, Any, Optional, Union
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 import shutil
 import tempfile
@@ -500,7 +500,7 @@ async def generate_graph_info(job_id: str) -> dict:
         "dataset_count": dataset_count,
         "data_size": humanize.naturalsize(dir_size),
         # fix the timezone to UTC
-        "imported_on": str(datetime.now(tz=datetime.timezone.utc)),
+        "imported_on": str(datetime.now(tz=timezone.utc)),
         "top_entities": top_entities,
         "top_connections": top_connections,
         "frequent_relationships": [
