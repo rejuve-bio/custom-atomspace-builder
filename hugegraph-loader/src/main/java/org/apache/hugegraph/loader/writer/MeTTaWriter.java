@@ -3,12 +3,16 @@ package org.apache.hugegraph.loader.writer;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.RandomAccessFile;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.apache.hugegraph.loader.builder.Record;
 import org.apache.hugegraph.structure.graph.Edge;
@@ -16,13 +20,14 @@ import org.apache.hugegraph.structure.graph.Vertex;
 
 public class MeTTaWriter {
     
-    private final String output_dir;
+    private final String OUTPUT_DIR;
+    private static final ConcurrentHashMap<String, Object> FILE_LOCKS = new ConcurrentHashMap<>();
     
     public MeTTaWriter(String outputDir) {
+        this.OUTPUT_DIR = outputDir;
         // Create output directory if it doesn't exist
-        this.output_dir = outputDir;
         try {
-            Files.createDirectories(Paths.get(outputDir));
+            Files.createDirectories(Paths.get(OUTPUT_DIR));
         } catch (IOException e) {
             throw new RuntimeException("Failed to create output directory", e);
         }
@@ -38,17 +43,8 @@ public class MeTTaWriter {
             String label = entry.getKey();
             List<Vertex> vertices = entry.getValue();
             
-            String filePath = this.output_dir + "/" + label +"_nodes"+ ".metta";
-            
-            try (FileWriter writer = new FileWriter(filePath, true)) {
-                for (Vertex vertex : vertices) {
-                    String mettaNode = writeNode(vertex);
-                    writer.write(mettaNode + "\n");
-                }
-                writer.write("\n");
-            } catch (IOException e) {
-                throw new RuntimeException("Failed to write nodes to file: " + filePath, e);
-            }
+            String filePath = OUTPUT_DIR + "/" + label + ".metta";
+            writeToFileWithLock(filePath, vertices, true);
         }
     }
     
@@ -56,11 +52,9 @@ public class MeTTaWriter {
      * Write a single vertex to MeTTa format
      */
     public String writeNode(Vertex vertex) {
-        String id = vertex.id().toString();
+        String id = vertex.id() == null ? "null" : vertex.id().toString();
         String label = vertex.label();
         Map<String, Object> properties = vertex.properties();
-        // remove the id property from the properties map
-        properties.remove("id");
         
         StringBuilder result = new StringBuilder();
         result.append("(").append(label).append(" ").append(id).append(")");
@@ -105,17 +99,8 @@ public class MeTTaWriter {
             String label = entry.getKey();
             List<Edge> edges = entry.getValue();
             
-            String filePath = this.output_dir + "/" + label +"_edges"+ ".metta";
-            
-            try (FileWriter writer = new FileWriter(filePath, true)) {
-                for (Edge edge : edges) {
-                    String mettaEdge = writeEdge(edge);
-                    writer.write(mettaEdge + "\n");
-                }
-                writer.write("\n");
-            } catch (IOException e) {
-                throw new RuntimeException("Failed to write edges to file: " + filePath, e);
-            }
+            String filePath = OUTPUT_DIR + "/" + label + ".metta";
+            writeToFileWithLock(filePath, edges, false);
         }
     }
     
@@ -123,14 +108,12 @@ public class MeTTaWriter {
      * Write a single edge to MeTTa format
      */
     public String writeEdge(Edge edge) {
-        String sourceId = edge.sourceId().toString();
-        String targetId = edge.targetId().toString();
+        String sourceId = edge.sourceId() == null ? "null" : edge.sourceId().toString();
+        String targetId = edge.targetId() == null ? "null" : edge.targetId().toString();
         String sourceLabel = edge.sourceLabel();
         String targetLabel = edge.targetLabel();
         String label = edge.label();
         Map<String, Object> properties = edge.properties();
-        // remove the id property from the properties map
-        properties.remove("id");
         
         StringBuilder result = new StringBuilder();
         result.append("(").append(label).append(" (").append(sourceLabel).append(" ").append(sourceId).append(") ")
@@ -169,9 +152,50 @@ public class MeTTaWriter {
     }
     
     /**
+     * Write elements to file with proper locking to prevent concurrent access issues
+     */
+    private <T> void writeToFileWithLock(String filePath, List<T> elements, boolean isVertex) {
+        // Get or create a lock object for this file
+        Object fileLock = FILE_LOCKS.computeIfAbsent(filePath, k -> new Object());
+        
+        synchronized (fileLock) {
+            try (RandomAccessFile file = new RandomAccessFile(filePath, "rw");
+                 FileChannel channel = file.getChannel();
+                 FileLock lock = channel.lock()) {
+                
+                // Move to the end of the file
+                file.seek(file.length());
+                
+                // Write the content
+                StringBuilder content = new StringBuilder();
+                for (T element : elements) {
+                    if (isVertex) {
+                        content.append(writeNode((Vertex) element)).append("\n");
+                    } else {
+                        content.append(writeEdge((Edge) element)).append("\n");
+                    }
+                }
+                content.append("\n");
+                
+                // Write the content to the file
+                file.write(content.toString().getBytes());
+                
+                // Force changes to be written to the disk
+                channel.force(true);
+            } catch (IOException e) {
+                throw new RuntimeException("Failed to write to file: " + filePath, e);
+            }
+        }
+    }
+    
+    /**
      * Helper method to escape special characters in property values
      */
     private String checkProperty(String prop) {
+        if (prop == null) {
+            return "null";
+        }
+        
         if (prop.contains(" ")) {
             prop = prop.replace(" ", "_");
         }
