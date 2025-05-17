@@ -620,7 +620,7 @@ def delete_job_history(job_id: str):
         history = json.load(f)
     
     # Check if this is the selected job
-    selected_job_id = history.get("selected_job_id", "")
+    selected_job_id = get_selected_job_id()
     if selected_job_id == job_id:
         selected_job_affected = True
         # Don't set a new selection here - we'll do that after updating history
