@@ -418,10 +418,7 @@ def get_job_id_to_use(job_id: Optional[str] = None) -> str:
         return os.path.basename(latest_dir)
     
     # No valid job ID found
-    raise HTTPException(
-        status_code=404,
-        detail="No job directories found - please upload data first"
-    )
+    raise None
 
 async def generate_graph_info(job_id: str) -> dict:
     """Generate the graph info structure from schema and metadata"""
@@ -600,6 +597,58 @@ def clear_history():
         os.remove(SELECTED_JOB_FILE)
     
     return history
+
+def delete_job_history(job_id: str):
+    """
+    Delete a specific job from history by job_id
+    
+    Args:
+        job_id: ID of the job to delete
+        
+    Returns:
+        Updated history dictionary and boolean indicating if selected job was affected
+    """
+    history_path = os.path.join(BASE_OUTPUT_DIR, "history.json")
+    selected_job_affected = False
+    new_selected_job = None
+    
+    # If history doesn't exist, return empty history
+    if not os.path.exists(history_path):
+        return {"selected_job_id": "", "history": []}, selected_job_affected, new_selected_job
+    
+    # Load existing history
+    with open(history_path, 'r') as f:
+        history = json.load(f)
+    
+    # Check if this is the selected job
+    selected_job_id = history.get("selected_job_id", "")
+    if selected_job_id == job_id:
+        selected_job_affected = True
+    
+    # Filter out the job to delete
+    original_count = len(history["history"])
+    history["history"] = [item for item in history["history"] if item.get("job_id") != job_id]
+    
+    # If selected job was affected and there are other jobs in history,
+    # make the first job the new selected job
+    if selected_job_affected and history["history"]:
+        new_selected_job = history["history"][0].get("job_id")
+        history["selected_job_id"] = new_selected_job
+    elif selected_job_affected:
+        history["selected_job_id"] = ""
+        if os.path.exists(SELECTED_JOB_FILE):
+            os.remove(SELECTED_JOB_FILE)
+    
+    # Only write if something changed
+    if len(history["history"]) != original_count or selected_job_affected:
+        with open(history_path, 'w') as f:
+            json.dump(history, f, indent=2)
+        
+        # Update the selected job file if needed
+        if new_selected_job:
+            save_selected_job_id(new_selected_job)
+    
+    return history, selected_job_affected, new_selected_job
 
 @app.post("/api/load", response_model=HugeGraphLoadResponse)
 async def load_data(
@@ -950,6 +999,58 @@ async def get_annotation_schema(job_id: str = None):
             status_code=500,
             detail=f"Error generating annotation schema: {str(e)}"
         )
+
+@app.delete("/api/history/{job_id}")
+async def delete_job_history_endpoint(job_id: str):
+    """
+    Delete a specific job from history by job_id
+    
+    Args:
+        job_id: ID of the job to delete
+        
+    Returns:
+        Confirmation message and updated history
+    """
+    # Delete the job from history
+    updated_history, selected_job_affected, new_selected_job = delete_job_history(job_id)
+    
+    # Try to delete the job directory if it exists
+    job_dir = get_job_output_dir(job_id)
+    dir_deleted = False
+    
+    if os.path.exists(job_dir):
+        try:
+            shutil.rmtree(job_dir)
+            dir_deleted = True
+        except Exception as e:
+            print(f"Warning: Could not delete job directory {job_dir}: {e}")
+    
+    # Notify annotation service about the new selected job if it changed
+    annotation_error = None
+    if new_selected_job:
+        try:
+            annotation_error = await notify_annotation_service(new_selected_job)
+        except Exception as e:
+            annotation_error = f"Error notifying annotation service: {str(e)}"
+    
+    # Generate appropriate message
+    message_parts = ["Job removed from history"]
+    if dir_deleted:
+        message_parts.append("job directory deleted")
+    if selected_job_affected:
+        if new_selected_job:
+            message_parts.append(f"selected job was updated to {new_selected_job}")
+        else:
+            message_parts.append("selected job was reset")
+    
+    return {
+        "message": ", ".join(message_parts),
+        "history": updated_history,
+        "directory_deleted": dir_deleted,
+        "selected_job_affected": selected_job_affected,
+        "new_selected_job": new_selected_job,
+        "annotation_error": annotation_error
+    }
 
 @app.post("/api/clear-history")
 async def clear_history_endpoint():
