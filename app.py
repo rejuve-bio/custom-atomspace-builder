@@ -390,7 +390,7 @@ def get_latest_job_dir(output_base_dir: str = BASE_OUTPUT_DIR) -> Optional[str]:
     job_dirs.sort(key=os.path.getmtime, reverse=True)
     return job_dirs[0]
 
-def get_job_id_to_use(job_id: Optional[str] = None) -> str:
+def get_job_id_to_use(job_id: Optional[str] = None) -> Optional[str]:
     """
     Determine which job ID to use based on priority:
     1. Explicitly provided job_id
@@ -398,27 +398,29 @@ def get_job_id_to_use(job_id: Optional[str] = None) -> str:
     3. Latest job directory
     
     Returns:
-        job_id string
-    Raises:
-        HTTPException if no job ID can be determined
+        job_id string or None if no valid job ID can be determined
     """
-    # Priority 1: Use explicitly provided job_id
-    if job_id:
-        if os.path.exists(get_job_output_dir(job_id)):
-            return job_id
-    
-    # Priority 2: Use selected job ID from file
-    selected_id = get_selected_job_id()
-    if selected_id and os.path.exists(get_job_output_dir(selected_id)):
-        return selected_id
-    
-    # Priority 3: Use latest job directory
-    latest_dir = get_latest_job_dir()
-    if latest_dir:
-        return os.path.basename(latest_dir)
-    
-    # No valid job ID found
-    raise None
+    try:
+        # Priority 1: Use explicitly provided job_id
+        if job_id:
+            if os.path.exists(get_job_output_dir(job_id)):
+                return job_id
+        
+        # Priority 2: Use selected job ID from file
+        selected_id = get_selected_job_id()
+        if selected_id and os.path.exists(get_job_output_dir(selected_id)):
+            return selected_id
+        
+        # Priority 3: Use latest job directory
+        latest_dir = get_latest_job_dir()
+        if latest_dir:
+            return os.path.basename(latest_dir)
+        
+        # No valid job ID found
+        return None
+    except Exception as e:
+        print(f"Error in get_job_id_to_use: {str(e)}")
+        return None
 
 async def generate_graph_info(job_id: str) -> dict:
     """Generate the graph info structure from schema and metadata"""
@@ -917,11 +919,66 @@ async def get_graph_info(job_id: str = None):
     - If no job_id: uses selected or most recently created job directory
     - If no jobs exist: returns empty graph structure
     """
-    # Get the job ID to use
-    job_id = get_job_id_to_use(job_id)
-    
-    # Return empty structure if no job ID available
-    if not job_id:
+    try:
+        # Get the job ID to use
+        job_id = get_job_id_to_use(job_id)
+        
+        # Return empty structure if no job ID available
+        if not job_id:
+            return {
+                "job_id": "",
+                "node_count": 0,
+                "edge_count": 0,
+                "dataset_count": 0,
+                "data_size": "0 B",
+                "imported_on": str(datetime.now(tz=timezone.utc)),
+                "top_entities": [],
+                "top_connections": [],
+                "frequent_relationships": [],
+                "schema": {
+                    "nodes": [],
+                    "edges": []
+                }
+            }
+        
+        output_dir = get_job_output_dir(job_id)
+        info_path = os.path.join(output_dir, "graph_info.json")
+        
+        if not os.path.exists(output_dir):
+            # Return empty structure instead of 404 error when directory doesn't exist
+            return {
+                "job_id": "",
+                "node_count": 0,
+                "edge_count": 0, 
+                "dataset_count": 0,
+                "data_size": "0 B",
+                "imported_on": str(datetime.now(tz=timezone.utc)),
+                "top_entities": [],
+                "top_connections": [],
+                "frequent_relationships": [],
+                "schema": {
+                    "nodes": [],
+                    "edges": []
+                }
+            }
+        
+        # If cached version exists, return it
+        if os.path.exists(info_path):
+            try:
+                with open(info_path, 'r') as f:
+                    return json.load(f)
+            except Exception as e:
+                print(f"Error reading cached graph info: {e}")
+        
+        # Otherwise generate fresh and cache it
+        graph_info = await generate_graph_info(job_id)
+        save_graph_info(job_id, graph_info)
+        return graph_info
+    except Exception as e:
+        # Log the error for debugging purposes
+        print(f"Error in get_graph_info: {str(e)}")
+        
+        # Return empty structure instead of error
         return {
             "job_id": "",
             "node_count": 0,
@@ -937,34 +994,6 @@ async def get_graph_info(job_id: str = None):
                 "edges": []
             }
         }
-    
-    output_dir = get_job_output_dir(job_id)
-    info_path = os.path.join(output_dir, "graph_info.json")
-    
-    if not os.path.exists(output_dir):
-        raise HTTPException(
-            status_code=404,
-            detail=f"Job directory not found: {job_id}"
-        )
-    
-    # If cached version exists, return it
-    if os.path.exists(info_path):
-        try:
-            with open(info_path, 'r') as f:
-                return json.load(f)
-        except Exception as e:
-            print(f"Error reading cached graph info: {e}")
-    
-    # Otherwise generate fresh and cache it
-    try:
-        graph_info = await generate_graph_info(job_id)
-        save_graph_info(job_id, graph_info)
-        return graph_info
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error generating graph info: {str(e)}"
-        )
 
 @app.get("/api/schema/{job_id}", response_class=JSONResponse)
 @app.get("/api/schema/", response_class=JSONResponse)
@@ -973,37 +1002,39 @@ async def get_annotation_schema(job_id: str = None):
     Get annotation schema, using either provided job_id, selected job, or latest job.
     Returns empty schema structure if no jobs exist.
     """
-    # Get the job ID to use
-    job_id = get_job_id_to_use(job_id)
-    
-    # Return empty structure if no job ID available
-    if not job_id:
-        return {
-            "job_id": "",
-            "nodes": [],
-            "edges": []
-        }
-    
-    output_dir = get_job_output_dir(job_id)
-    schema_path = os.path.join(output_dir, "schema.json")
-    annotation_path = os.path.join(output_dir, "annotation_schema.json")
-    
-    # Return cached version if exists
-    if os.path.exists(annotation_path):
-        try:
-            with open(annotation_path, 'r') as f:
-                return json.load(f)
-        except Exception as e:
-            print(f"Error reading cached annotation schema: {e}")
-    
-    # Generate fresh if no cache exists
     try:
-        if not os.path.exists(schema_path):
-            raise HTTPException(
-                status_code=404,
-                detail=f"Schema file not found for job {job_id}"
-            )
-            
+        # Get the job ID to use
+        job_id = get_job_id_to_use(job_id)
+        
+        # Return empty structure if no job ID available
+        if not job_id:
+            return {
+                "job_id": "",
+                "nodes": [],
+                "edges": []
+            }
+        
+        output_dir = get_job_output_dir(job_id)
+        schema_path = os.path.join(output_dir, "schema.json")
+        annotation_path = os.path.join(output_dir, "annotation_schema.json")
+        
+        if not os.path.exists(output_dir) or not os.path.exists(schema_path):
+            # Return empty structure instead of 404 error
+            return {
+                "job_id": "",
+                "nodes": [],
+                "edges": []
+            }
+        
+        # Return cached version if exists
+        if os.path.exists(annotation_path):
+            try:
+                with open(annotation_path, 'r') as f:
+                    return json.load(f)
+            except Exception as e:
+                print(f"Error reading cached annotation schema: {e}")
+        
+        # Generate fresh if no cache exists
         with open(schema_path, 'r') as f:
             schema_data = json.load(f)
         
@@ -1014,12 +1045,16 @@ async def get_annotation_schema(job_id: str = None):
             json.dump(annotation_schema, f, indent=2)
         
         return annotation_schema
-        
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error generating annotation schema: {str(e)}"
-        )
+        # Log the error for debugging purposes
+        print(f"Error in get_annotation_schema: {str(e)}")
+        
+        # Return empty structure instead of error
+        return {
+            "job_id": "",
+            "nodes": [],
+            "edges": []
+        }
 
 @app.delete("/api/history/{job_id}")
 async def delete_job_history_endpoint(job_id: str):
