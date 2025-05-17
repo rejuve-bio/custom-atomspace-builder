@@ -975,17 +975,21 @@ async def get_graph_info(job_id: str = None):
 @app.get("/api/schema/{job_id}", response_class=JSONResponse)
 @app.get("/api/schema/", response_class=JSONResponse)
 async def get_annotation_schema(job_id: str = None):
-    """Get annotation schema, using either provided job_id, selected job, or latest job"""
+    """
+    Get annotation schema, using either provided job_id, selected job, or latest job.
+    Returns empty schema structure if no jobs exist.
+    """
     # Get the job ID to use
     job_id = get_job_id_to_use(job_id)
+    
+    # Return empty structure if no job ID available
     if not job_id:
-        latest_dir = get_latest_job_dir()
-        if not latest_dir:
-            raise HTTPException(
-                status_code=404,
-                detail="No job directories found"
-            )
-        job_id = os.path.basename(latest_dir)
+        return {
+            "job_id": "",
+            "nodes": [],
+            "edges": []
+        }
+    
     output_dir = get_job_output_dir(job_id)
     schema_path = os.path.join(output_dir, "schema.json")
     annotation_path = os.path.join(output_dir, "annotation_schema.json")
