@@ -915,15 +915,34 @@ async def convert_schema(schema_json: Dict = None):
         raise HTTPException(status_code=400, detail=f"Error converting schema: {str(e)}")
 
 @app.get("/api/kg-info/{job_id}", response_class=JSONResponse)
-@app.get("/api/kg-info/", response_class=JSONResponse)  # Add this route for empty job_id
+@app.get("/api/kg-info/", response_class=JSONResponse)
 async def get_graph_info(job_id: str = None):
     """
     Get comprehensive graph information:
     - If job_id provided: uses that specific job's data
     - If no job_id: uses selected or most recently created job directory
+    - If no jobs exist: returns empty graph structure
     """
     # Get the job ID to use
     job_id = get_job_id_to_use(job_id)
+    
+    # Return empty structure if no job ID available
+    if not job_id:
+        return {
+            "job_id": "",
+            "node_count": 0,
+            "edge_count": 0,
+            "dataset_count": 0,
+            "data_size": "0 B",
+            "imported_on": str(datetime.now(tz=timezone.utc)),
+            "top_entities": [],
+            "top_connections": [],
+            "frequent_relationships": [],
+            "schema": {
+                "nodes": [],
+                "edges": []
+            }
+        }
     
     output_dir = get_job_output_dir(job_id)
     info_path = os.path.join(output_dir, "graph_info.json")
@@ -952,7 +971,6 @@ async def get_graph_info(job_id: str = None):
             status_code=500,
             detail=f"Error generating graph info: {str(e)}"
         )
-
 
 @app.get("/api/schema/{job_id}", response_class=JSONResponse)
 @app.get("/api/schema/", response_class=JSONResponse)
