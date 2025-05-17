@@ -1071,7 +1071,7 @@ async def delete_job_history_endpoint(job_id: str):
             message_parts.append(f"selected job set to {new_selected_job}")
         else:
             message_parts.append("selected job was reset")
-    
+    updated_history["selected_job_id"] = get_job_id_to_use()
     return {
         "message": ", ".join(message_parts),
         "history": updated_history,
