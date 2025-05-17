@@ -582,6 +582,25 @@ async def notify_annotation_service(job_id: str) -> Dict[str, Any]:
     
     return error_msg
 
+def clear_history():
+    """Clear the history file and reset the selected job ID"""
+    history_path = os.path.join(BASE_OUTPUT_DIR, "history.json")
+    # Create an empty history file
+    history = {"selected_job_id": "", "history": []}
+    
+    # Create directory if it doesn't exist
+    os.makedirs(os.path.dirname(history_path), exist_ok=True)
+    
+    # Write the empty history
+    with open(history_path, 'w') as f:
+        json.dump(history, f, indent=2)
+    
+    # Reset the selected job ID
+    if os.path.exists(SELECTED_JOB_FILE):
+        os.remove(SELECTED_JOB_FILE)
+    
+    return history
+
 @app.post("/api/load", response_model=HugeGraphLoadResponse)
 async def load_data(
     files: List[UploadFile] = File(...),
@@ -931,6 +950,20 @@ async def get_annotation_schema(job_id: str = None):
             status_code=500,
             detail=f"Error generating annotation schema: {str(e)}"
         )
+
+@app.post("/api/clear-history")
+async def clear_history_endpoint():
+    """
+    Clear the job history and reset the selected job ID
+    
+    Returns:
+        Confirmation message and empty history
+    """
+    history = clear_history()
+    return {
+        "message": "History cleared successfully",
+        "history": history
+    }
 
 @app.get("/api/health")
 async def health_check():
