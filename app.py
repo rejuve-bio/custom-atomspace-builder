@@ -1080,7 +1080,7 @@ async def delete_job_history_endpoint(job_id: str):
         "new_selected_job": new_selected_job
     }
 
-@app.post("/api/clear-history")
+@app.delete("/api/clear-history")
 async def clear_history_endpoint():
     """
     Clear the job history and reset the selected job ID
