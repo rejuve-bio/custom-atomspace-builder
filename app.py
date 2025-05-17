@@ -829,10 +829,15 @@ async def get_history():
     """
     history_path = os.path.join(BASE_OUTPUT_DIR, "history.json")
     if not os.path.exists(history_path):
-        raise HTTPException(status_code=404, detail="No job history found")
+        # Return empty history rather than 404
+        return {"selected_job_id": "", "history": []}
+    
     with open(history_path, 'r') as f:
         history = json.load(f)
-    history["selected_job_id"] = get_job_id_to_use()
+    
+    job_id = get_job_id_to_use()
+    history["selected_job_id"] = job_id if job_id else ""
+    
     return history
 
 @app.get("/api/output/{job_id}")
