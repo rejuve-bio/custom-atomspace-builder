@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Dict, List, Any, Optional, Union
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 import shutil
 import tempfile
@@ -35,6 +35,7 @@ HUGEGRAPH_GRAPH = "hugegraph"
 BASE_OUTPUT_DIR = os.path.abspath("./output")
 ANNOTATION_SERVICE_URL = "http://100.67.47.42:5800/annotation/load"
 ANNOTATION_SERVICE_TIMEOUT = 300.0  # seconds
+SELECTED_JOB_FILE = os.path.join(BASE_OUTPUT_DIR, "selected_job.txt")
 
 
 # Schema Models
@@ -80,6 +81,8 @@ class HugeGraphLoadResponse(BaseModel):
     schema_path: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = None
 
+class JobSelectionRequest(BaseModel):
+    job_id: str
 
 def json_to_groovy(schema_json: Union[Dict, SchemaDefinition]) -> str:
     """
@@ -313,6 +316,17 @@ def save_graph_info(job_id: str, graph_info: dict):
     """Save graph info to a JSON file for caching"""
     output_dir = get_job_output_dir(job_id)
     info_path = os.path.join(output_dir, "graph_info.json")
+    # also append it on the histroy.json which is on the BASE_OUTPUT_DIR
+    history_path = os.path.join(BASE_OUTPUT_DIR, "history.json")
+    if os.path.exists(history_path):
+        with open(history_path, 'r') as f:
+            history = json.load(f)
+    else:
+        history = {"selected_job_id":"", "history": []}
+    # add it in front
+    history["history"] = [graph_info] + history["history"]
+    with open(history_path, 'w') as f:
+        json.dump(history, f, indent=2)
     with open(info_path, 'w') as f:
         json.dump(graph_info, f, indent=2)
 
@@ -343,7 +357,71 @@ def count_files_in_directory(directory: str) -> int:
         ])
     except Exception:
         return 0
+
+def get_selected_job_id() -> Optional[str]:
+    """Get the currently selected job ID from the file"""
+    if not os.path.exists(SELECTED_JOB_FILE):
+        return None
     
+    try:
+        with open(SELECTED_JOB_FILE, 'r') as f:
+            return f.read().strip()
+    except Exception as e:
+        print(f"Error reading selected job ID: {e}")
+        return None
+
+def save_selected_job_id(job_id: str):
+    """Save the selected job ID to the file"""
+    # Create directory if it doesn't exist
+    os.makedirs(os.path.dirname(SELECTED_JOB_FILE), exist_ok=True)
+    
+    try:
+        with open(SELECTED_JOB_FILE, 'w') as f:
+            f.write(job_id)
+    except Exception as e:
+        print(f"Error saving selected job ID: {e}")
+
+def get_latest_job_dir(output_base_dir: str = BASE_OUTPUT_DIR) -> Optional[str]:
+    """Get the most recently created job directory"""
+    job_dirs = glob.glob(os.path.join(output_base_dir, "*"))
+    if not job_dirs:
+        return None
+    # Sort by creation time (newest first)
+    job_dirs.sort(key=os.path.getmtime, reverse=True)
+    return job_dirs[0]
+
+def get_job_id_to_use(job_id: Optional[str] = None) -> Optional[str]:
+    """
+    Determine which job ID to use based on priority:
+    1. Explicitly provided job_id
+    2. Selected job ID from file
+    3. Latest job directory
+    
+    Returns:
+        job_id string or None if no valid job ID can be determined
+    """
+    try:
+        # Priority 1: Use explicitly provided job_id
+        if job_id:
+            if os.path.exists(get_job_output_dir(job_id)):
+                return job_id
+        
+        # Priority 2: Use selected job ID from file
+        selected_id = get_selected_job_id()
+        if selected_id and os.path.exists(get_job_output_dir(selected_id)):
+            return selected_id
+        
+        # Priority 3: Use latest job directory
+        latest_dir = get_latest_job_dir()
+        if latest_dir:
+            return os.path.basename(latest_dir)
+        
+        # No valid job ID found
+        return None
+    except Exception as e:
+        print(f"Error in get_job_id_to_use: {str(e)}")
+        return None
+
 async def generate_graph_info(job_id: str) -> dict:
     """Generate the graph info structure from schema and metadata"""
     output_dir = get_job_output_dir(job_id)
@@ -415,11 +493,13 @@ async def generate_graph_info(job_id: str) -> dict:
         })
     
     return {
+        "job_id": job_id,
         "node_count": total_vertices,
         "edge_count": total_edges,
         "dataset_count": dataset_count,
         "data_size": humanize.naturalsize(dir_size),
-        "imported_on": str(datetime.now()),
+        # fix the timezone to UTC
+        "imported_on": str(datetime.now(tz=timezone.utc)),
         "top_entities": top_entities,
         "top_connections": top_connections,
         "frequent_relationships": [
@@ -432,11 +512,12 @@ async def generate_graph_info(job_id: str) -> dict:
         }
     }
 
-def generate_annotation_schema(schema_data: dict) -> dict:
+def generate_annotation_schema(schema_data: dict, job_id: str) -> dict:
     """
     Convert standard schema format to annotation schema format
     """
     annotation_schema = {
+        "job_id": job_id,
         "nodes": [],
         "edges": []
     }
@@ -492,11 +573,78 @@ async def notify_annotation_service(job_id: str) -> Dict[str, Any]:
     except httpx.TimeoutException:
         error_msg = "Timeout connecting to annotation service"
         print(f"Warning: {error_msg}")
+        return error_msg
     except Exception as e:
         error_msg = f"Failed to connect to annotation service: {str(e)}"
         print(f"Warning: {error_msg}")
+        return error_msg
     
     return error_msg
+
+def clear_history():
+    """Clear the history file and reset the selected job ID"""
+    history_path = os.path.join(BASE_OUTPUT_DIR, "history.json")
+    # Create an empty history file
+    history = {"selected_job_id": "", "history": []}
+    
+    # Create directory if it doesn't exist
+    os.makedirs(os.path.dirname(history_path), exist_ok=True)
+    
+    # Write the empty history
+    with open(history_path, 'w') as f:
+        json.dump(history, f, indent=2)
+    
+    # Reset the selected job ID
+    if os.path.exists(SELECTED_JOB_FILE):
+        os.remove(SELECTED_JOB_FILE)
+    
+    return history
+
+def delete_job_history(job_id: str):
+    """
+    Delete a specific job from history by job_id
+    
+    Args:
+        job_id: ID of the job to delete
+        
+    Returns:
+        Updated history dictionary and boolean indicating if selected job was affected
+    """
+    history_path = os.path.join(BASE_OUTPUT_DIR, "history.json")
+    selected_job_affected = False
+    
+    # If history doesn't exist, return empty history
+    if not os.path.exists(history_path):
+        return {"selected_job_id": "", "history": []}, selected_job_affected
+    
+    # Load existing history
+    with open(history_path, 'r') as f:
+        history = json.load(f)
+    
+    # Check if this is the selected job
+    selected_job_id = get_selected_job_id()
+    if selected_job_id == job_id:
+        selected_job_affected = True
+        # Don't set a new selection here - we'll do that after updating history
+        
+        # Clear the selected job file
+        if os.path.exists(SELECTED_JOB_FILE):
+            os.remove(SELECTED_JOB_FILE)
+    
+    # Filter out the job to delete
+    original_count = len(history["history"])
+    history["history"] = [item for item in history["history"] if item.get("job_id") != job_id]
+    
+    # Only write if something changed
+    if len(history["history"]) != original_count or selected_job_affected:
+        # If the selected job was affected, we'll temporarily set it to empty
+        if selected_job_affected:
+            history["selected_job_id"] = ""
+            
+        with open(history_path, 'w') as f:
+            json.dump(history, f, indent=2)
+    
+    return history, selected_job_affected
 
 @app.post("/api/load", response_model=HugeGraphLoadResponse)
 async def load_data(
@@ -576,6 +724,7 @@ async def load_data(
             metadata = load_metadata(output_dir)
 
             if result.returncode != 0:
+                shutil.rmtree(output_dir, ignore_errors=True)
                 raise HTTPException(
                     status_code=500,
                     detail={
@@ -587,6 +736,8 @@ async def load_data(
                 )
                 
             if len(output_files) == 0:
+                # delete the directory
+                shutil.rmtree(output_dir, ignore_errors=True)
                 raise HTTPException(
                     status_code=500,
                     detail={
@@ -602,15 +753,14 @@ async def load_data(
             with open(schema_json_path, "w") as f:
                 json.dump(schema_data, f, indent=2)
             output_filenames.append(os.path.basename(schema_json_path))
-            
-            # Generate and save graph info
-            graph_info = await generate_graph_info(job_id) 
-            save_graph_info(job_id, graph_info)
-            output_filenames.append("graph_info.json")
 
-            # Notify annotation service
+            # Notify the annotation service
             error_msg = await notify_annotation_service(job_id)
             if error_msg:
+                select_job_id = get_selected_job_id()
+                notify_annotation_service(job_id)
+                # delete the directory
+                shutil.rmtree(output_dir, ignore_errors=True)
                 raise HTTPException(
                     status_code=500,
                     detail={
@@ -618,6 +768,12 @@ async def load_data(
                         "job_id": job_id
                     }
                 )
+            
+            # Generate and save graph info
+            graph_info = await generate_graph_info(job_id) 
+            save_graph_info(job_id, graph_info)
+            output_filenames.append("graph_info.json")
+            save_selected_job_id(job_id)
 
             return HugeGraphLoadResponse(
                 job_id=job_id,
@@ -632,7 +788,53 @@ async def load_data(
     except json.JSONDecodeError as e:
         raise HTTPException(status_code=400, detail=f"Invalid JSON: {str(e)}")
     except Exception as e:
+        shutil.rmtree(output_dir, ignore_errors=True)
         raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
+
+@app.post("/api/select-job")
+async def select_job(request: JobSelectionRequest):
+    """
+    Select a job ID for future requests.
+
+    Args:
+        request: JSON body with job_id
+
+    Returns:
+        Confirmation message
+    """
+    job_id = request.job_id
+
+    if not os.path.exists(get_job_output_dir(job_id)):
+        raise HTTPException(status_code=404, detail=f"Job ID {job_id} does not exist")
+    
+    error_msg = await notify_annotation_service(job_id)
+    if error_msg:
+        raise HTTPException(status_code=500, detail=f"Error connecting annotation service: {error_msg}")
+    
+    save_selected_job_id(job_id)
+
+    return {"message": f"Job ID {job_id} selected successfully"}
+
+@app.get("/api/history", response_class=JSONResponse)
+async def get_history():
+    """
+    Retrieve the history of loaded jobs from history.json in the BASE_outputdir.
+    
+    Returns:
+        List of job history items
+    """
+    history_path = os.path.join(BASE_OUTPUT_DIR, "history.json")
+    if not os.path.exists(history_path):
+        # Return empty history rather than 404
+        return {"selected_job_id": "", "history": []}
+    
+    with open(history_path, 'r') as f:
+        history = json.load(f)
+    
+    job_id = get_job_id_to_use()
+    history["selected_job_id"] = job_id if job_id else ""
+    
+    return history
 
 @app.get("/api/output/{job_id}")
 async def get_output(job_id: str):
@@ -708,110 +910,224 @@ async def convert_schema(schema_json: Dict = None):
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error converting schema: {str(e)}")
 
-def get_latest_job_dir(output_base_dir: str = BASE_OUTPUT_DIR) -> Optional[str]:
-    """Get the most recently created job directory"""
-    job_dirs = glob.glob(os.path.join(output_base_dir, "*"))
-    if not job_dirs:
-        return None
-    # Sort by creation time (newest first)
-    job_dirs.sort(key=os.path.getmtime, reverse=True)
-    return job_dirs[0]
-
 @app.get("/api/kg-info/{job_id}", response_class=JSONResponse)
-@app.get("/api/kg-info/", response_class=JSONResponse)  # Add this route for empty job_id
+@app.get("/api/kg-info/", response_class=JSONResponse)
 async def get_graph_info(job_id: str = None):
     """
     Get comprehensive graph information:
     - If job_id provided: uses that specific job's data
-    - If no job_id: uses the most recently created job directory
+    - If no job_id: uses selected or most recently created job directory
+    - If no jobs exist: returns empty graph structure
     """
-    # Handle case where no job_id is provided
-    if not job_id:
-        latest_dir = get_latest_job_dir()
-        if not latest_dir:
-            raise HTTPException(
-                status_code=404,
-                detail="No job directories found in output folder"
-            )
-        job_id = os.path.basename(latest_dir)
-    
-    output_dir = get_job_output_dir(job_id)
-    info_path = os.path.join(output_dir, "graph_info.json")
-    
-    if not os.path.exists(output_dir):
-        raise HTTPException(
-            status_code=404,
-            detail=f"Job directory not found: {job_id}"
-        )
-    
-    # If cached version exists, return it
-    if os.path.exists(info_path):
-        try:
-            with open(info_path, 'r') as f:
-                return json.load(f)
-        except Exception as e:
-            print(f"Error reading cached graph info: {e}")
-    
-    # Otherwise generate fresh and cache it
     try:
+        # Get the job ID to use
+        job_id = get_job_id_to_use(job_id)
+        
+        # Return empty structure if no job ID available
+        if not job_id:
+            return {
+                "job_id": "",
+                "node_count": 0,
+                "edge_count": 0,
+                "dataset_count": 0,
+                "data_size": "0 B",
+                "imported_on": str(datetime.now(tz=timezone.utc)),
+                "top_entities": [],
+                "top_connections": [],
+                "frequent_relationships": [],
+                "schema": {
+                    "nodes": [],
+                    "edges": []
+                }
+            }
+        
+        output_dir = get_job_output_dir(job_id)
+        info_path = os.path.join(output_dir, "graph_info.json")
+        
+        if not os.path.exists(output_dir):
+            # Return empty structure instead of 404 error when directory doesn't exist
+            return {
+                "job_id": "",
+                "node_count": 0,
+                "edge_count": 0, 
+                "dataset_count": 0,
+                "data_size": "0 B",
+                "imported_on": str(datetime.now(tz=timezone.utc)),
+                "top_entities": [],
+                "top_connections": [],
+                "frequent_relationships": [],
+                "schema": {
+                    "nodes": [],
+                    "edges": []
+                }
+            }
+        
+        # If cached version exists, return it
+        if os.path.exists(info_path):
+            try:
+                with open(info_path, 'r') as f:
+                    return json.load(f)
+            except Exception as e:
+                print(f"Error reading cached graph info: {e}")
+        
+        # Otherwise generate fresh and cache it
         graph_info = await generate_graph_info(job_id)
         save_graph_info(job_id, graph_info)
         return graph_info
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error generating graph info: {str(e)}"
-        )
-
+        # Log the error for debugging purposes
+        print(f"Error in get_graph_info: {str(e)}")
+        
+        # Return empty structure instead of error
+        return {
+            "job_id": "",
+            "node_count": 0,
+            "edge_count": 0,
+            "dataset_count": 0,
+            "data_size": "0 B",
+            "imported_on": str(datetime.now(tz=timezone.utc)),
+            "top_entities": [],
+            "top_connections": [],
+            "frequent_relationships": [],
+            "schema": {
+                "nodes": [],
+                "edges": []
+            }
+        }
 
 @app.get("/api/schema/{job_id}", response_class=JSONResponse)
 @app.get("/api/schema/", response_class=JSONResponse)
 async def get_annotation_schema(job_id: str = None):
-    """Get annotation schema, optionally auto-detecting latest job"""
-    if not job_id:
-        latest_dir = get_latest_job_dir()
-        if not latest_dir:
-            raise HTTPException(
-                status_code=404,
-                detail="No job directories found"
-            )
-        job_id = os.path.basename(latest_dir)
-    output_dir = get_job_output_dir(job_id)
-    schema_path = os.path.join(output_dir, "schema.json")
-    annotation_path = os.path.join(output_dir, "annotation_schema.json")
-    
-    # Return cached version if exists
-    if os.path.exists(annotation_path):
-        try:
-            with open(annotation_path, 'r') as f:
-                return json.load(f)
-        except Exception as e:
-            print(f"Error reading cached annotation schema: {e}")
-    
-    # Generate fresh if no cache exists
+    """
+    Get annotation schema, using either provided job_id, selected job, or latest job.
+    Returns empty schema structure if no jobs exist.
+    """
     try:
-        if not os.path.exists(schema_path):
-            raise HTTPException(
-                status_code=404,
-                detail=f"Schema file not found for job {job_id}"
-            )
-            
+        # Get the job ID to use
+        job_id = get_job_id_to_use(job_id)
+        
+        # Return empty structure if no job ID available
+        if not job_id:
+            return {
+                "job_id": "",
+                "nodes": [],
+                "edges": []
+            }
+        
+        output_dir = get_job_output_dir(job_id)
+        schema_path = os.path.join(output_dir, "schema.json")
+        annotation_path = os.path.join(output_dir, "annotation_schema.json")
+        
+        if not os.path.exists(output_dir) or not os.path.exists(schema_path):
+            # Return empty structure instead of 404 error
+            return {
+                "job_id": "",
+                "nodes": [],
+                "edges": []
+            }
+        
+        # Return cached version if exists
+        if os.path.exists(annotation_path):
+            try:
+                with open(annotation_path, 'r') as f:
+                    return json.load(f)
+            except Exception as e:
+                print(f"Error reading cached annotation schema: {e}")
+        
+        # Generate fresh if no cache exists
         with open(schema_path, 'r') as f:
             schema_data = json.load(f)
         
-        annotation_schema = generate_annotation_schema(schema_data)
+        annotation_schema = generate_annotation_schema(schema_data, job_id)
         
         # Save for future requests
         with open(annotation_path, 'w') as f:
             json.dump(annotation_schema, f, indent=2)
         
         return annotation_schema
-        
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error generating annotation schema: {str(e)}"
-        )
+        # Log the error for debugging purposes
+        print(f"Error in get_annotation_schema: {str(e)}")
+        
+        # Return empty structure instead of error
+        return {
+            "job_id": "",
+            "nodes": [],
+            "edges": []
+        }
+
+@app.delete("/api/history/{job_id}")
+async def delete_job_history_endpoint(job_id: str):
+    """
+    Delete a specific job from history by job_id
+    
+    Args:
+        job_id: ID of the job to delete
+        
+    Returns:
+        Confirmation message and updated history
+    """
+    # Delete the job from history
+    updated_history, selected_job_affected = delete_job_history(job_id)
+    
+    # Try to delete the job directory if it exists
+    job_dir = get_job_output_dir(job_id)
+    dir_deleted = False
+    new_selected_job = None
+    
+    if os.path.exists(job_dir):
+        try:
+            shutil.rmtree(job_dir)
+            dir_deleted = True
+        except Exception as e:
+            print(f"Warning: Could not delete job directory {job_dir}: {e}")
+    
+    # If the selected job was affected and we have jobs in history, select the first job
+    if selected_job_affected and updated_history["history"]:
+        try:
+            # Get the first job ID from history
+            new_job_id = updated_history["history"][0]["job_id"]
+            
+            # Use the existing select_job functionality to set the new job
+            await select_job(JobSelectionRequest(job_id=new_job_id))
+            new_selected_job = new_job_id
+            
+            # Update the history object with the new selection
+            updated_history["selected_job_id"] = new_job_id
+        except Exception as e:
+            print(f"Warning: Could not select new job: {e}")
+    
+    # Generate appropriate message
+    message_parts = ["Job removed from history"]
+    if dir_deleted:
+        message_parts.append("job directory deleted")
+    if selected_job_affected:
+        if new_selected_job:
+            message_parts.append(f"selected job set to {new_selected_job}")
+        else:
+            message_parts.append("selected job was reset")
+    updated_history["selected_job_id"] = get_job_id_to_use()
+    return {
+        "message": ", ".join(message_parts),
+        "history": updated_history,
+        "directory_deleted": dir_deleted,
+        "selected_job_affected": selected_job_affected,
+        "new_selected_job": new_selected_job
+    }
+
+@app.delete("/api/clear-history")
+async def clear_history_endpoint():
+    """
+    Clear the job history and reset the selected job ID
+    
+    Returns:
+        Confirmation message and empty history
+    """
+    history = clear_history()
+    return {
+        "message": "History cleared successfully",
+        "history": history
+    }
 
 @app.get("/api/health")
 async def health_check():
