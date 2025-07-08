@@ -758,7 +758,7 @@ async def load_data(
             error_msg = await notify_annotation_service(job_id)
             if error_msg:
                 select_job_id = get_selected_job_id()
-                notify_annotation_service(job_id)
+                await notify_annotation_service(job_id)
                 # delete the directory
                 shutil.rmtree(output_dir, ignore_errors=True)
                 raise HTTPException(
