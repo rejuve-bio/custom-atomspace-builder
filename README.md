@@ -1,4 +1,4 @@
-# HugeGraph Loader API
+# Custom Atomspace Builder API
 
 A FastAPI-based REST API wrapper for Apache HugeGraph Loader with enhanced capabilities including MeTTa graph representation generation and comprehensive job management.
 
