@@ -66,7 +66,10 @@ HUGEGRAPH_PORT = "8080"
 HUGEGRAPH_GRAPH = "hugegraph"
 ANNOTATION_SERVICE_URL = "http://your-annotation-service:5800/annotation/load"
 ```
-
+### 4. Run HugeGraph instance
+```bash
+ docker run -d -p 8080:8080 -p 8182:8182 --name hugegraph hugegraph/hugegraph
+```
 ## Deployment
 
 ### Current Deployment Method
