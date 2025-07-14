@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Dict, List, Any, Optional, Union
 from datetime import datetime, timezone
+from enum import Enum
 import json
 import shutil
 import tempfile
@@ -37,6 +38,24 @@ ANNOTATION_SERVICE_URL = "http://100.67.47.42:5800/annotation/load"
 ANNOTATION_SERVICE_TIMEOUT = 300.0  # seconds
 SELECTED_JOB_FILE = os.path.join(BASE_OUTPUT_DIR, "selected_job.txt")
 
+
+class WriterType(str, Enum):
+    METTA = "metta"
+    NEO4J = "neo4j"
+
+class HugeGraphLoadRequest(BaseModel):
+    files: List[UploadFile]
+    config: str
+    schema_json: str
+    writer_type: WriterType = WriterType.METTA  # Default to MeTTa
+    neo4j_config: Optional[Dict[str, Any]] = None  # Neo4j connection details if needed
+
+class Neo4jConfig(BaseModel):
+    host: str = "localhost"
+    port: int = 7687
+    username: str = "neo4j"
+    password: str
+    database: str = "neo4j"
 
 # Schema Models
 class PropertyKey(BaseModel):
