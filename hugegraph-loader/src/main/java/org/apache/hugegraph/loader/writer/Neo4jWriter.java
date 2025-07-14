@@ -52,6 +52,27 @@ public class Neo4jCSVWriter {
         }
     }
     
+    /**
+     * Write edges to CSV format compatible with Neo4j
+     */
+    public void writeEdges(List<Record> records) {
+        Map<String, List<Map<String, Object>>> edgesByType = groupEdgesByType(records);
+        
+        for (Map.Entry<String, List<Map<String, Object>>> entry : edgesByType.entrySet()) {
+            String edgeKey = entry.getKey();
+            List<Map<String, Object>> edges = entry.getValue();
+            
+            String csvPath = OUTPUT_DIR + "/edges_" + edgeKey + ".csv";
+            String cypherPath = OUTPUT_DIR + "/edges_" + edgeKey + ".cypher";
+            
+            try {
+                writeEdgeCSV(edgeKey, edges, csvPath);
+                writeEdgeCypher(edgeKey, csvPath, cypherPath);
+            } catch (IOException e) {
+                throw new RuntimeException("Failed to write edges for type: " + edgeKey, e);
+            }
+        }
+    }
     
     private void writeNodeCSV(String label, List<Map<String, Object>> nodes, String csvPath) throws IOException {
         Set<String> headers = new HashSet<>();
@@ -81,6 +102,33 @@ public class Neo4jCSVWriter {
         }
     }
     
+    private void writeEdgeCSV(String edgeKey, List<Map<String, Object>> edges, String csvPath) throws IOException {
+        Set<String> headers = new HashSet<>();
+        headers.addAll(Arrays.asList("source_id", "target_id", "label", "source_type", "target_type"));
+        
+        // Collect all possible headers
+        for (Map<String, Object> edge : edges) {
+            headers.addAll(edge.keySet());
+        }
+        
+        List<String> sortedHeaders = new ArrayList<>(headers);
+        Collections.sort(sortedHeaders);
+        
+        try (FileWriter writer = new FileWriter(csvPath)) {
+            // Write header
+            writer.write(String.join(CSV_DELIMITER, sortedHeaders) + "\n");
+            
+            // Write data
+            for (Map<String, Object> edge : edges) {
+                List<String> values = new ArrayList<>();
+                for (String header : sortedHeaders) {
+                    Object value = edge.get(header);
+                    values.add(preprocessValue(value));
+                }
+                writer.write(String.join(CSV_DELIMITER, values) + "\n");
+            }
+        }
+    }
     
     private void writeNodeCypher(String label, String csvPath, String cypherPath) throws IOException {
         String absolutePath = new File(csvPath).getAbsolutePath();
@@ -99,7 +147,31 @@ public class Neo4jCSVWriter {
             writer.write(cypherQuery);
         }
     }
-
+    
+    private void writeEdgeCypher(String edgeKey, String csvPath, String cypherPath) throws IOException {
+        String absolutePath = new File(csvPath).getAbsolutePath();
+        
+        // Extract edge information from key (format: label_sourceType_targetType)
+        String[] parts = edgeKey.split("_");
+        String edgeLabel = parts[0];
+        String sourceType = parts[1];
+        String targetType = parts[2];
+        
+        String cypherQuery = String.format(
+            "CALL apoc.periodic.iterate(\n" +
+            "  \"LOAD CSV WITH HEADERS FROM 'file:///%s' AS row FIELDTERMINATOR '%s' RETURN row\",\n" +
+            "  \"MATCH (source:%s {id: row.source_id}) MATCH (target:%s {id: row.target_id}) \" +\n" +
+            "  \"MERGE (source)-[r:%s]->(target) \" +\n" +
+            "  \"SET r += apoc.map.removeKeys(row, ['source_id', 'target_id', 'label', 'source_type', 'target_type'])\",\n" +
+            "  {batchSize:1000}\n" +
+            ") YIELD batches, total RETURN batches, total;",
+            absolutePath, CSV_DELIMITER, sourceType, targetType, edgeLabel
+        );
+        
+        try (FileWriter writer = new FileWriter(cypherPath)) {
+            writer.write(cypherQuery);
+        }
+    }
     
     private String preprocessValue(Object value) {
         if (value == null) {
@@ -141,4 +213,28 @@ public class Neo4jCSVWriter {
         return result;
     }
     
+    private Map<String, List<Map<String, Object>>> groupEdgesByType(List<Record> records) {
+        Map<String, List<Map<String, Object>>> result = new HashMap<>();
+        
+        for (Record record : records) {
+            Edge edge = (Edge) record.element();
+            String label = edge.label().toLowerCase();
+            String sourceLabel = edge.sourceLabel().toLowerCase();
+            String targetLabel = edge.targetLabel().toLowerCase();
+            
+            String edgeKey = label + "_" + sourceLabel + "_" + targetLabel;
+            
+            Map<String, Object> edgeData = new HashMap<>();
+            edgeData.put("source_id", preprocessId(edge.sourceId().toString()));
+            edgeData.put("target_id", preprocessId(edge.targetId().toString()));
+            edgeData.put("label", label);
+            edgeData.put("source_type", sourceLabel);
+            edgeData.put("target_type", targetLabel);
+            edgeData.putAll(edge.properties());
+            
+            result.computeIfAbsent(edgeKey, k -> new ArrayList<>()).add(edgeData);
+        }
+        
+        return result;
+    }
 }
