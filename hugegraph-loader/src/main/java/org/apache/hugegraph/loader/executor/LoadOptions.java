@@ -61,6 +61,11 @@ public class LoadOptions implements Serializable {
                description = "The path of the output directory")
     public String output;
 
+    @Parameter(names = {"-w", "--writer-type"}, arity = 1,
+               description = "Choose the writer type, " +
+                             "allowed values are: metta or neo4j")
+    public String writerType = "metta";
+
     @Parameter(names = {"-h", "--host"}, arity = 1,
                validateWith = {UrlValidator.class},
                description = "The host/IP of HugeGraphServer")

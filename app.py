@@ -671,7 +671,7 @@ async def load_data(
     files: List[UploadFile] = File(...),
     config: str = Form(...),
     schema_json: str = Form(...),
-    writer_type: WriterType = Form(WriterType.METTA),
+    writer_type: str = Form(...),
     neo4j_config: Optional[str] = Form(None)  # JSON string of Neo4j config
 ):
     """
@@ -720,7 +720,7 @@ async def load_data(
                 "-p", HUGEGRAPH_PORT,
                 "--clear-all-data", "true",
                 "-o", output_dir,
-                "--writer-type", writer_type.value  # Add writer type parameter
+                "-w", writer_type
             ]
             
             if schema_path:
@@ -751,11 +751,15 @@ async def load_data(
                         "stderr": result.stderr
                     }
                 )
+            # save the schema json to the output directory
+            schema_json_path = os.path.join(output_dir, f"schema.json")
+            with open(schema_json_path, "w") as f:
+                json.dump(schema_data, f, indent=2)
             
             # Save additional metadata about writer type
             job_metadata = {
                 "job_id": job_id,
-                "writer_type": writer_type.value,
+                "writer_type": writer_type,
                 "output_formats": [],
                 "neo4j_config": neo4j_settings if neo4j_settings else None
             }
@@ -772,17 +776,17 @@ async def load_data(
                 json.dump(job_metadata, f, indent=2)
             
             # Generate graph info based on writer type
-            graph_info = await generate_graph_info(job_id, writer_type)
+            graph_info = await generate_graph_info(job_id)
             save_graph_info(job_id, graph_info)
             
             return HugeGraphLoadResponse(
                 job_id=job_id,
                 status="success",
-                message=f"Graph generated successfully using {writer_type.value} writer",
+                message=f"Graph generated successfully using {writer_type} writer",
                 metadata=metadata,
                 output_files=[os.path.basename(f) for f in output_files],
                 output_dir=output_dir,
-                writer_type=writer_type.value
+                writer_type=writer_type
             )
             
     except Exception as e:
