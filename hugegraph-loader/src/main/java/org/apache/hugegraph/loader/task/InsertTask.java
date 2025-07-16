@@ -60,6 +60,7 @@ public abstract class InsertTask implements Runnable {
     protected final List<Record> batch;
     protected final MeTTaWriter mettaWriter;
     protected final Neo4jCSVWriter neo4jWriter;
+    protected final String writerType;
 
     public InsertTask(LoadContext context, InputStruct struct,
                       ElementMapping mapping, List<Record> batch) {
@@ -120,9 +121,9 @@ public abstract class InsertTask implements Runnable {
         if (this.type().isVertex()) {
             // client.graph().addVertices((List<Vertex>) (Object) elements);
             if (this.writerType.equals("metta")) {
-                this.mettaWriter.writeVertices(batch);
+                this.mettaWriter.writeNodes(batch);
             } else if (this.writerType.equals("neo4j")) {
-                this.neo4jWriter.writeVertices(batch);
+                this.neo4jWriter.writeNodes(batch);
             }
         } else {
             // client.graph().addEdges((List<Edge>) (Object) elements,
