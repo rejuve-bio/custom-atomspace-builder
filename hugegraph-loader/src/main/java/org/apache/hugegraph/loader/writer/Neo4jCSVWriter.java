@@ -1,3 +1,5 @@
+package org.apache.hugegraph.loader.writer;
+
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -13,16 +15,17 @@ import org.apache.hugegraph.structure.graph.Vertex;
 
 public class Neo4jCSVWriter {
     
-    private static final String OUTPUT_DIR = "/home/developer/Desktop/neo4j_output";
     private static final String CSV_DELIMITER = "|";
     private static final String ARRAY_DELIMITER = ";";
     
+    private final String OUTPUT_DIR;
     private final Map<String, Set<String>> nodeHeaders = new ConcurrentHashMap<>();
     private final Map<String, Set<String>> edgeHeaders = new ConcurrentHashMap<>();
     private final Map<String, String> edgeNodeTypes = new ConcurrentHashMap<>();
     private final int batchSize = 10000;
     
-    public Neo4jCSVWriter() {
+    public Neo4jCSVWriter(String outputDir) {
+        this.OUTPUT_DIR = outputDir;
         try {
             Files.createDirectories(Paths.get(OUTPUT_DIR));
         } catch (IOException e) {
@@ -137,7 +140,7 @@ public class Neo4jCSVWriter {
             "CREATE CONSTRAINT IF NOT EXISTS FOR (n:%s) REQUIRE n.id IS UNIQUE;\n\n" +
             "CALL apoc.periodic.iterate(\n" +
             "  \"LOAD CSV WITH HEADERS FROM 'file:///%s' AS row FIELDTERMINATOR '%s' RETURN row\",\n" +
-            "  \"MERGE (n:%s {id: row.id}) SET n += apoc.map.removeKeys(row, ['id'])\",\n" +
+            "  \"CREATE (n:%s {id: row.id}) SET n += apoc.map.removeKeys(row, ['id'])\",\n" +
             "  {batchSize:1000, parallel:true, concurrency:4}\n" +
             ") YIELD batches, total RETURN batches, total;",
             label, absolutePath, CSV_DELIMITER, label
@@ -161,7 +164,7 @@ public class Neo4jCSVWriter {
             "CALL apoc.periodic.iterate(\n" +
             "  \"LOAD CSV WITH HEADERS FROM 'file:///%s' AS row FIELDTERMINATOR '%s' RETURN row\",\n" +
             "  \"MATCH (source:%s {id: row.source_id}) MATCH (target:%s {id: row.target_id}) \" +\n" +
-            "  \"MERGE (source)-[r:%s]->(target) \" +\n" +
+            "  \"CREATE (source)-[r:%s]->(target) \" +\n" +
             "  \"SET r += apoc.map.removeKeys(row, ['source_id', 'target_id', 'label', 'source_type', 'target_type'])\",\n" +
             "  {batchSize:1000}\n" +
             ") YIELD batches, total RETURN batches, total;",
