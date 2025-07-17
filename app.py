@@ -1,6 +1,8 @@
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException
 from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
+from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
+from pathlib import Path
 from pydantic import BaseModel
 from typing import Dict, List, Any, Optional, Union
 from datetime import datetime, timezone
@@ -27,16 +29,6 @@ load_dotenv()
 with open("config.yaml", "r") as f:
     config = yaml.safe_load(f)
 
-app = FastAPI(title="Custom AtomSpace Builder API")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=config['cors']['allow_origins'],
-    allow_credentials=config['cors']['allow_credentials'],
-    allow_methods=config['cors']['allow_methods'],
-    allow_headers=config['cors']['allow_headers'],
-)
-
 HUGEGRAPH_LOADER_PATH = config['paths']['hugegraph_loader']
 HUGEGRAPH_HOST = os.getenv('HUGEGRAPH_HOST')
 HUGEGRAPH_PORT = os.getenv('HUGEGRAPH_PORT')
@@ -54,14 +46,16 @@ NEO4J_CONFIG = {
     "database": os.getenv('NEO4J_DATABASE')
 }
 
-neo4j_driver = None
-
 def initialize_neo4j_driver():
     global neo4j_driver
     try:
         neo4j_driver = GraphDatabase.driver(
             f"bolt://{NEO4J_CONFIG['host']}:{NEO4J_CONFIG['port']}", 
-            auth=(NEO4J_CONFIG['username'], NEO4J_CONFIG['password'])
+            auth=(NEO4J_CONFIG['username'], NEO4J_CONFIG['password']),
+            max_connection_lifetime=3600,
+            max_connection_pool_size=50,
+            connection_timeout=10,
+            encrypted=False
         )
         # Test connection
         with neo4j_driver.session() as session:
@@ -70,9 +64,29 @@ def initialize_neo4j_driver():
         return True
     except Exception as e:
         print(f"Failed to initialize Neo4j driver: {e}")
+        print("Neo4j features will be disabled until connection is restored")
         return False
 
-initialize_neo4j_driver()
+neo4j_driver = None
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    initialize_neo4j_driver()
+    yield
+    # Shutdown
+    if neo4j_driver:
+        neo4j_driver.close()
+        print("Neo4j driver closed")
+
+app = FastAPI(title="Custom AtomSpace Builder API", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=config['cors']['allow_origins'],
+    allow_credentials=config['cors']['allow_credentials'],
+    allow_methods=config['cors']['allow_methods'],
+    allow_headers=config['cors']['allow_headers'],
+)
 
 class WriterType(str, Enum):
     METTA = "metta"
@@ -422,6 +436,7 @@ async def notify_annotation_service(job_id: str) -> Optional[str]:
     return None
 
 def clear_history():
+    """Clear the history file, reset selected job ID, and delete all output directories"""
     history_path = os.path.join(BASE_OUTPUT_DIR, "history.json")
     history = {"selected_job_id": "", "history": []}
     
@@ -432,7 +447,18 @@ def clear_history():
     if os.path.exists(SELECTED_JOB_FILE):
         os.remove(SELECTED_JOB_FILE)
     
+    # Delete all directories inside output directory
+    try:
+        for item in os.listdir(BASE_OUTPUT_DIR):
+            item_path = os.path.join(BASE_OUTPUT_DIR, item)
+            if os.path.isdir(item_path):
+                shutil.rmtree(item_path)
+                print(f"✅ Deleted output directory: {item}")
+    except Exception as e:
+        print(f"⚠️ Warning: Error deleting output directories: {e}")
+    
     return history
+
 
 def delete_job_history(job_id: str):
     history_path = os.path.join(BASE_OUTPUT_DIR, "history.json")
@@ -460,6 +486,126 @@ def delete_job_history(job_id: str):
             json.dump(history, f, indent=2)
     
     return history, selected_job_affected
+
+async def load_data_to_neo4j(output_dir: str, job_id: str) -> dict:
+    """Load generated CSV files to Neo4j using Cypher scripts"""
+    if not neo4j_driver:
+        return {"status": "error", "message": "Neo4j driver not initialized"}
+    
+    try:
+        # Step 1: Copy CSV files to job-specific directory
+        csv_copy_result = copy_csv_files_to_neo4j(output_dir, job_id)
+        if not csv_copy_result["success"]:
+            return {"status": "error", "message": csv_copy_result["message"]}
+        
+        with neo4j_driver.session() as session:
+            # Find all cypher files
+            node_files = sorted(Path(output_dir).glob("nodes_*.cypher"))
+            edge_files = sorted(Path(output_dir).glob("edges_*.cypher"))
+            
+            results = {"nodes_loaded": 0, "edges_loaded": 0, "files_processed": []}
+            
+            # Process node files first
+            for file_path in node_files:
+                result = execute_cypher_file(session, file_path, job_id)
+                if result["success"]:
+                    results["nodes_loaded"] += result.get("total", 0)
+                    results["files_processed"].append(str(file_path.name))
+            
+            # Process edge files second
+            for file_path in edge_files:
+                result = execute_cypher_file(session, file_path, job_id)
+                if result["success"]:
+                    results["edges_loaded"] += result.get("total", 0)
+                    results["files_processed"].append(str(file_path.name))
+            
+            # Step 3: Cleanup import files after successful loading
+            cleanup_neo4j_import_files(job_id)
+            
+            return {
+                "status": "success",
+                "job_id": job_id,
+                "tenant_id": job_id,
+                "results": results
+            }
+            
+    except Exception as e:
+        # Try to cleanup even if loading failed
+        cleanup_neo4j_import_files(job_id)
+        return {"status": "error", "message": str(e)}
+
+def copy_csv_files_to_neo4j(output_dir: str, job_id: str, container_name: str = "neo4j-atomspace") -> dict:
+    """Copy CSV files to Neo4j container import/job_id directory"""
+    try:
+        csv_files = list(Path(output_dir).glob("*.csv"))
+        if not csv_files:
+            return {"success": False, "message": "No CSV files found"}
+        
+        # Create job-specific directory in Neo4j import
+        mkdir_cmd = f"docker exec {container_name} mkdir -p /var/lib/neo4j/import/{job_id}"
+        os.system(mkdir_cmd)
+        
+        copied_files = []
+        for csv_file in csv_files:
+            # Copy file to job-specific directory
+            copy_cmd = f"docker cp {csv_file} {container_name}:/var/lib/neo4j/import/{job_id}/"
+            result = os.system(copy_cmd)
+            
+            if result == 0:
+                copied_files.append(csv_file.name)
+                print(f"✅ Copied {csv_file.name} to Neo4j import/{job_id}/")
+            else:
+                return {"success": False, "message": f"Failed to copy {csv_file.name}"}
+        
+        return {"success": True, "files_copied": copied_files}
+        
+    except Exception as e:
+        return {"success": False, "message": f"Error copying files: {str(e)}"}
+
+def cleanup_neo4j_import_files(job_id: str, container_name: str = "neo4j-atomspace"):
+    """Delete job-specific files from Neo4j import directory after loading"""
+    try:
+        cleanup_cmd = f"docker exec {container_name} rm -rf /var/lib/neo4j/import/{job_id}"
+        result = os.system(cleanup_cmd)
+        
+        if result == 0:
+            print(f"✅ Cleaned up Neo4j import files for job {job_id}")
+            return True
+        else:
+            print(f"⚠️ Warning: Could not cleanup import files for job {job_id}")
+            return False
+            
+    except Exception as e:
+        print(f"⚠️ Warning: Error cleaning up import files: {e}")
+        return False
+
+def execute_cypher_file(session, file_path, job_id):
+    try:
+        with open(file_path, 'r') as f:
+            content = f.read()
+        
+        queries = content.split(';')
+        total_operations = 0
+        
+        for query in queries:
+            query = query.strip()
+            if not query:
+                continue
+            
+            print(f"Executing query: {query[:100]}...")
+            result = session.run(query)
+            records = list(result)
+            if records and len(records) > 0:
+                if 'total' in records[0]:
+                    total_operations += records[0]['total']
+                elif 'batches' in records[0]:
+                    total_operations += records[0]['batches']
+        
+        return {"success": True, "total": total_operations}
+        
+    except Exception as e:
+        print(f"Error executing {file_path}: {e}")
+        return {"success": False, "error": str(e)}
 
 @app.post("/api/load", response_model=HugeGraphLoadResponse)
 async def load_data(
@@ -555,6 +701,17 @@ async def load_data(
             
             metadata = load_metadata(output_dir)
             
+            # Auto load to Neo4j if writer_type is neo4j
+            neo4j_load_result = None
+            if writer_type == "neo4j":
+                neo4j_load_result = await load_data_to_neo4j(output_dir, job_id)
+                
+                # Save load results
+                if neo4j_load_result:
+                    neo4j_result_path = os.path.join(output_dir, "neo4j_load_result.json")
+                    with open(neo4j_result_path, "w") as f:
+                        json.dump(neo4j_load_result, f, indent=2)
+            
             error_msg = await notify_annotation_service(job_id)
             if error_msg:
                 selected_job_id = get_selected_job_id()
@@ -570,11 +727,15 @@ async def load_data(
             
             output_filenames = [os.path.basename(f) for f in output_files]
             output_filenames.extend(["schema.json", "job_metadata.json", "graph_info.json"])
-            
+            success_message = f"Graph generated successfully using {writer_type} writer"
+            if neo4j_load_result and neo4j_load_result["status"] == "success":
+                results = neo4j_load_result["results"]
+                success_message += f" and loaded to Neo4j ({results['nodes_loaded']} nodes, {results['edges_loaded']} edges)"
+
             return HugeGraphLoadResponse(
                 job_id=job_id,
                 status="success",
-                message=f"Graph generated successfully using {writer_type} writer",
+                message=success_message,
                 metadata=metadata,
                 output_files=output_filenames,
                 output_dir=output_dir,
@@ -794,6 +955,10 @@ async def get_neo4j_config():
 async def health_check():
     return {"status": "ok"}
 
+@app.on_event("shutdown")
+async def shutdown_event():
+    if neo4j_driver:
+        neo4j_driver.close()
 
 if __name__ == "__main__":
     import uvicorn
