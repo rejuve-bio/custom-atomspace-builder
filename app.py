@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from typing import Dict, List, Any, Optional, Union
 from datetime import datetime, timezone
 from enum import Enum
+from neo4j import GraphDatabase
 from dotenv import load_dotenv
 import json
 import shutil
@@ -18,6 +19,7 @@ import io
 import humanize
 import httpx
 import yaml
+import logging
 
 load_dotenv()
 
@@ -51,6 +53,26 @@ NEO4J_CONFIG = {
     "password": os.getenv('NEO4J_PASSWORD'),
     "database": os.getenv('NEO4J_DATABASE')
 }
+
+neo4j_driver = None
+
+def initialize_neo4j_driver():
+    global neo4j_driver
+    try:
+        neo4j_driver = GraphDatabase.driver(
+            f"bolt://{NEO4J_CONFIG['host']}:{NEO4J_CONFIG['port']}", 
+            auth=(NEO4J_CONFIG['username'], NEO4J_CONFIG['password'])
+        )
+        # Test connection
+        with neo4j_driver.session() as session:
+            session.run("RETURN 1").consume()
+        print("Neo4j driver initialized successfully")
+        return True
+    except Exception as e:
+        print(f"Failed to initialize Neo4j driver: {e}")
+        return False
+
+initialize_neo4j_driver()
 
 class WriterType(str, Enum):
     METTA = "metta"
