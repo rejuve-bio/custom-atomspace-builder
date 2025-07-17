@@ -137,15 +137,15 @@ public class Neo4jCSVWriter {
     
     private void writeNodeCypher(String label, String csvPath, String cypherPath) throws IOException {
         String absolutePath = new File(csvPath).getAbsolutePath();
+        String csvFileName = this.JOB_ID + "/" + new File(csvPath).getName();
         
         String cypherQuery = String.format(
-            "CREATE CONSTRAINT IF NOT EXISTS FOR (n:%s) REQUIRE n.id IS UNIQUE;\n\n" +
             "CALL apoc.periodic.iterate(\n" +
             "  \"LOAD CSV WITH HEADERS FROM 'file:///%s' AS row FIELDTERMINATOR '%s' RETURN row\",\n" +
-            "  \"CREATE (n:%s {id: row.id, tenant_id:%s}) SET n += apoc.map.removeKeys(row, ['id'])\",\n" +
+            "  \"CREATE (n:%s {id: row.id, tenant_id:'%s'}) SET n += apoc.map.removeKeys(row, ['id'])\",\n" +
             "  {batchSize:1000, parallel:true, concurrency:4}\n" +
             ") YIELD batches, total RETURN batches, total;",
-            label, absolutePath, CSV_DELIMITER, label, this.JOB_ID
+            csvFileName, CSV_DELIMITER, label, this.JOB_ID
         );
         
         try (FileWriter writer = new FileWriter(cypherPath)) {
@@ -155,6 +155,7 @@ public class Neo4jCSVWriter {
     
     private void writeEdgeCypher(String edgeKey, String csvPath, String cypherPath) throws IOException {
         String absolutePath = new File(csvPath).getAbsolutePath();
+        String csvFileName = this.JOB_ID + "/" + new File(csvPath).getName();
         
         // Extract edge information from key (format: label_sourceType_targetType)
         String[] parts = edgeKey.split("_");
@@ -165,12 +166,12 @@ public class Neo4jCSVWriter {
         String cypherQuery = String.format(
             "CALL apoc.periodic.iterate(\n" +
             "  \"LOAD CSV WITH HEADERS FROM 'file:///%s' AS row FIELDTERMINATOR '%s' RETURN row\",\n" +
-            "  \"MATCH (source:%s {id: row.source_id}) MATCH (target:%s {id: row.target_id}) \" +\n" +
-            "  \"CREATE (source)-[r:%s {tenant_id:%s}]->(target) \" +\n" +
+            "  \"MATCH (source:%s {id: row.source_id, tenant_id:'%s'}) MATCH (target:%s {id: row.target_id, tenant_id:'%s'}) \" +\n" +
+            "  \"CREATE (source)-[r:%s {tenant_id:'%s'}]->(target) \" +\n" +
             "  \"SET r += apoc.map.removeKeys(row, ['source_id', 'target_id', 'label', 'source_type', 'target_type'])\",\n" +
             "  {batchSize:1000}\n" +
             ") YIELD batches, total RETURN batches, total;",
-            absolutePath, CSV_DELIMITER, sourceType, targetType, edgeLabel, this.JOB_ID
+            csvFileName, CSV_DELIMITER, sourceType, this.JOB_ID, targetType, this.JOB_ID, edgeLabel, this.JOB_ID
         );
         
         try (FileWriter writer = new FileWriter(cypherPath)) {
