@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from typing import Dict, List, Any, Optional, Union
 from datetime import datetime, timezone
 from enum import Enum
+from dotenv import load_dotenv
 import json
 import shutil
 import tempfile
@@ -16,32 +17,39 @@ import zipfile
 import io
 import humanize
 import httpx
+import yaml
+
+load_dotenv()
+
+# Load config
+with open("config.yaml", "r") as f:
+    config = yaml.safe_load(f)
 
 app = FastAPI(title="Custom AtomSpace Builder API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=config['cors']['allow_origins'],
+    allow_credentials=config['cors']['allow_credentials'],
+    allow_methods=config['cors']['allow_methods'],
+    allow_headers=config['cors']['allow_headers'],
 )
 
-HUGEGRAPH_LOADER_PATH = "./hugegraph-loader/apache-hugegraph-loader-incubating-1.5.0/bin/hugegraph-loader.sh"
-HUGEGRAPH_HOST = "localhost"
-HUGEGRAPH_PORT = "8080"
-HUGEGRAPH_GRAPH = "hugegraph"
-BASE_OUTPUT_DIR = os.path.abspath("./output")
-ANNOTATION_SERVICE_URL = "http://100.67.47.42:5800/annotation/load"
-ANNOTATION_SERVICE_TIMEOUT = 300.0
+HUGEGRAPH_LOADER_PATH = config['paths']['hugegraph_loader']
+HUGEGRAPH_HOST = os.getenv('HUGEGRAPH_HOST')
+HUGEGRAPH_PORT = os.getenv('HUGEGRAPH_PORT')
+HUGEGRAPH_GRAPH = os.getenv('HUGEGRAPH_GRAPH')
+BASE_OUTPUT_DIR = os.path.abspath(config['paths']['output_dir'])
+ANNOTATION_SERVICE_URL = os.getenv('ANNOTATION_SERVICE_URL')
+ANNOTATION_SERVICE_TIMEOUT = float(os.getenv('ANNOTATION_SERVICE_TIMEOUT'))
 SELECTED_JOB_FILE = os.path.join(BASE_OUTPUT_DIR, "selected_job.txt")
 
 NEO4J_CONFIG = {
-    "host": "localhost",
-    "port": 7687,
-    "username": "neo4j",
-    "password": "atomspace123",
-    "database": "neo4j"
+    "host": os.getenv('NEO4J_HOST'),
+    "port": int(os.getenv('NEO4J_PORT')),
+    "username": os.getenv('NEO4J_USERNAME'),
+    "password": os.getenv('NEO4J_PASSWORD'),
+    "database": os.getenv('NEO4J_DATABASE')
 }
 
 class WriterType(str, Enum):
