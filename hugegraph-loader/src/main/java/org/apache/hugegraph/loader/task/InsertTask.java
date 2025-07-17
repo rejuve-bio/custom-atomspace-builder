@@ -61,6 +61,8 @@ public abstract class InsertTask implements Runnable {
     protected final MeTTaWriter mettaWriter;
     protected final Neo4jCSVWriter neo4jWriter;
     protected final String writerType;
+    protected final String jobId;
+    protected final String outputDir;
 
     public InsertTask(LoadContext context, InputStruct struct,
                       ElementMapping mapping, List<Record> batch) {
@@ -69,8 +71,10 @@ public abstract class InsertTask implements Runnable {
         this.struct = struct;
         this.mapping = mapping;
         this.batch = batch;
-        this.mettaWriter = new MeTTaWriter(this.context.options().output);
-        this.neo4jWriter = new Neo4jCSVWriter(this.context.options().output);
+        this.outputDir = this.context.options().output;
+        this.jobId = this.context.options().jobId;
+        this.mettaWriter = new MeTTaWriter(this.outputDir);
+        this.neo4jWriter = new Neo4jCSVWriter(this.outputDir, this.jobId);
         this.writerType = this.context.options().writerType;
     }
 
