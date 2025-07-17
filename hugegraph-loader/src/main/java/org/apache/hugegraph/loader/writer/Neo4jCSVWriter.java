@@ -19,13 +19,15 @@ public class Neo4jCSVWriter {
     private static final String ARRAY_DELIMITER = ";";
     
     private final String OUTPUT_DIR;
+    private final String JOB_ID;
     private final Map<String, Set<String>> nodeHeaders = new ConcurrentHashMap<>();
     private final Map<String, Set<String>> edgeHeaders = new ConcurrentHashMap<>();
     private final Map<String, String> edgeNodeTypes = new ConcurrentHashMap<>();
     private final int batchSize = 10000;
     
-    public Neo4jCSVWriter(String outputDir) {
+    public Neo4jCSVWriter(String outputDir, String jobId) {
         this.OUTPUT_DIR = outputDir;
+        this.JOB_ID = jobId;
         try {
             Files.createDirectories(Paths.get(OUTPUT_DIR));
         } catch (IOException e) {
@@ -140,10 +142,10 @@ public class Neo4jCSVWriter {
             "CREATE CONSTRAINT IF NOT EXISTS FOR (n:%s) REQUIRE n.id IS UNIQUE;\n\n" +
             "CALL apoc.periodic.iterate(\n" +
             "  \"LOAD CSV WITH HEADERS FROM 'file:///%s' AS row FIELDTERMINATOR '%s' RETURN row\",\n" +
-            "  \"CREATE (n:%s {id: row.id}) SET n += apoc.map.removeKeys(row, ['id'])\",\n" +
+            "  \"CREATE (n:%s {id: row.id, tenant_id:%s}) SET n += apoc.map.removeKeys(row, ['id'])\",\n" +
             "  {batchSize:1000, parallel:true, concurrency:4}\n" +
             ") YIELD batches, total RETURN batches, total;",
-            label, absolutePath, CSV_DELIMITER, label
+            label, absolutePath, CSV_DELIMITER, label, this.JOB_ID
         );
         
         try (FileWriter writer = new FileWriter(cypherPath)) {
@@ -164,11 +166,11 @@ public class Neo4jCSVWriter {
             "CALL apoc.periodic.iterate(\n" +
             "  \"LOAD CSV WITH HEADERS FROM 'file:///%s' AS row FIELDTERMINATOR '%s' RETURN row\",\n" +
             "  \"MATCH (source:%s {id: row.source_id}) MATCH (target:%s {id: row.target_id}) \" +\n" +
-            "  \"CREATE (source)-[r:%s]->(target) \" +\n" +
+            "  \"CREATE (source)-[r:%s {tenant_id:%s}]->(target) \" +\n" +
             "  \"SET r += apoc.map.removeKeys(row, ['source_id', 'target_id', 'label', 'source_type', 'target_type'])\",\n" +
             "  {batchSize:1000}\n" +
             ") YIELD batches, total RETURN batches, total;",
-            absolutePath, CSV_DELIMITER, sourceType, targetType, edgeLabel
+            absolutePath, CSV_DELIMITER, sourceType, targetType, edgeLabel, this.JOB_ID
         );
         
         try (FileWriter writer = new FileWriter(cypherPath)) {

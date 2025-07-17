@@ -66,6 +66,11 @@ public class LoadOptions implements Serializable {
                              "allowed values are: metta or neo4j")
     public String writerType = "metta";
 
+    @Parameter(names = {"--job-id"}, arity = 1,
+               description = "The job id of the load task, " +
+                             "default is a random UUID")
+    public String jobId;
+
     @Parameter(names = {"-h", "--host"}, arity = 1,
                validateWith = {UrlValidator.class},
                description = "The host/IP of HugeGraphServer")
@@ -287,6 +292,9 @@ public class LoadOptions implements Serializable {
         // Check option "-o"
         E.checkArgument(!StringUtils.isEmpty(options.output),
                         "The output directory must be specified");
+        // Check option "--job-id"
+        E.checkArgument(!StringUtils.isEmpty(options.jobId),
+                        "The job id must be specified");
         // Check option "-h"
         if (!options.host.startsWith(Constants.HTTP_PREFIX)) {
             if (options.protocol.equals(HTTP_SCHEMA)) {

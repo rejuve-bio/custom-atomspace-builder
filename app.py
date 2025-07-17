@@ -480,7 +480,8 @@ async def load_data(
                 "-p", HUGEGRAPH_PORT,
                 "--clear-all-data", "true",
                 "-o", output_dir,
-                "-w", writer_type
+                "-w", writer_type,
+                "--job-id", job_id
             ]
             
             if schema_path:
