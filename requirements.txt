@@ -5,3 +5,4 @@ humanize
 httpx
 python-dotenv
 PyYAML
+neo4j
