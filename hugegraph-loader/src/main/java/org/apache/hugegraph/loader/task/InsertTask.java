@@ -31,6 +31,7 @@ import org.apache.hugegraph.loader.mapping.InputStruct;
 import org.apache.hugegraph.loader.metrics.LoadMetrics;
 import org.apache.hugegraph.loader.metrics.LoadSummary;
 import org.apache.hugegraph.loader.writer.MeTTaWriter;
+import org.apache.hugegraph.loader.writer.Neo4jCSVWriter;
 import org.apache.hugegraph.structure.GraphElement;
 import org.apache.hugegraph.structure.graph.BatchEdgeRequest;
 import org.apache.hugegraph.structure.graph.BatchVertexRequest;
@@ -58,6 +59,8 @@ public abstract class InsertTask implements Runnable {
     protected final ElementMapping mapping;
     protected final List<Record> batch;
     protected final MeTTaWriter mettaWriter;
+    protected final Neo4jCSVWriter neo4jWriter;
+    protected final String writerType;
 
     public InsertTask(LoadContext context, InputStruct struct,
                       ElementMapping mapping, List<Record> batch) {
@@ -67,6 +70,8 @@ public abstract class InsertTask implements Runnable {
         this.mapping = mapping;
         this.batch = batch;
         this.mettaWriter = new MeTTaWriter(this.context.options().output);
+        this.neo4jWriter = new Neo4jCSVWriter(this.context.options().output);
+        this.writerType = this.context.options().writerType;
     }
 
     public ElemType type() {
@@ -115,11 +120,20 @@ public abstract class InsertTask implements Runnable {
         batch.forEach(r -> elements.add(r.element()));
         if (this.type().isVertex()) {
             // client.graph().addVertices((List<Vertex>) (Object) elements);
-            this.mettaWriter.writeNodes(batch);
+            if (this.writerType.equals("metta")) {
+                this.mettaWriter.writeNodes(batch);
+            } else if (this.writerType.equals("neo4j")) {
+                this.neo4jWriter.writeNodes(batch);
+            }
         } else {
             // client.graph().addEdges((List<Edge>) (Object) elements,
                                     // checkVertex);
-            this.mettaWriter.writeEdges(batch);
+            if (this.writerType.equals("metta")) {
+                this.mettaWriter.writeEdges(batch);
+            } else if (this.writerType.equals("neo4j")) {
+                this.neo4jWriter.writeEdges(batch);
+            }
+            
         }
     }
 
