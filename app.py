@@ -1,3 +1,4 @@
+import asyncio
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException
 from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
 from contextlib import asynccontextmanager
@@ -39,8 +40,6 @@ ANNOTATION_SERVICE_TIMEOUT = float(os.getenv('ANNOTATION_SERVICE_TIMEOUT'))
 SELECTED_JOB_FILE = os.path.join(BASE_OUTPUT_DIR, "selected_job.txt")
 SESSION_TIMEOUT = timedelta(hours=2) 
 
-# For future: use redis session management
-upload_sessions = {}
 
 NEO4J_CONFIG = {
     "host": os.getenv('NEO4J_HOST'),
@@ -49,6 +48,9 @@ NEO4J_CONFIG = {
     "password": os.getenv('NEO4J_PASSWORD'),
     "database": os.getenv('NEO4J_DATABASE')
 }
+
+neo4j_driver = None
+upload_sessions = {}
 
 def initialize_neo4j_driver():
     global neo4j_driver
@@ -71,19 +73,57 @@ def initialize_neo4j_driver():
         print("Neo4j features will be disabled until connection is restored")
         return False
 
-neo4j_driver = None
+async def session_cleanup_worker():
+    """Background task to cleanup expired upload sessions"""
+    while True:
+        try:
+            now = datetime.now(tz=timezone.utc)
+            expired_sessions = [
+                sid for sid, session in upload_sessions.items()
+                if session.expires_at < now and session.status == "active"
+            ]
+            
+            for session_id in expired_sessions:
+                upload_sessions[session_id].status = "expired"
+                session_dir = os.path.join(BASE_OUTPUT_DIR, "uploads", session_id)
+                if os.path.exists(session_dir):
+                    shutil.rmtree(session_dir, ignore_errors=True)
+            
+            if expired_sessions:
+                print(f"Cleaned up {len(expired_sessions)} expired upload sessions")
+                
+        except asyncio.CancelledError:
+            print("Session cleanup task cancelled")
+            break
+        except Exception as e:
+            print(f"Error in session cleanup: {e}")
+        
+        await asyncio.sleep(300)  # Check every 5 minutes
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
     initialize_neo4j_driver()
+    
+    # Start session cleanup task
+    cleanup_task = asyncio.create_task(session_cleanup_worker())
+    
     yield
+    
     # Shutdown
+    cleanup_task.cancel()  # Stop cleanup task
+    try:
+        await cleanup_task
+    except asyncio.CancelledError:
+        pass
+    
     if neo4j_driver:
         neo4j_driver.close()
         print("Neo4j driver closed")
 
 app = FastAPI(title="Custom AtomSpace Builder API", lifespan=lifespan)
-
+    
 app.add_middleware(
     CORSMiddleware,
     allow_origins=config['cors']['allow_origins'],
@@ -639,6 +679,7 @@ def execute_cypher_file(session, file_path, job_id):
         print(f"Error executing {file_path}: {e}")
         return {"success": False, "error": str(e)}
 
+
 @app.post("/api/upload/create-session")
 async def create_upload_session_endpoint():
     """Create a new upload session"""
@@ -881,6 +922,8 @@ async def load_data(
                 success_message += f" and loaded to Neo4j ({results['nodes_loaded']} nodes, {results['edges_loaded']} edges)"
 
             session.status = "consumed"
+            # Cleanup session files
+            shutil.rmtree(session_dir, ignore_errors=True)
 
             return HugeGraphLoadResponse(
                 job_id=job_id,
@@ -1105,10 +1148,6 @@ async def get_neo4j_config():
 async def health_check():
     return {"status": "ok"}
 
-@app.on_event("shutdown")
-async def shutdown_event():
-    if neo4j_driver:
-        neo4j_driver.close()
 
 if __name__ == "__main__":
     import uvicorn
