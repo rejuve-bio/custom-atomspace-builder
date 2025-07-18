@@ -485,9 +485,9 @@ def clear_history():
             item_path = os.path.join(BASE_OUTPUT_DIR, item)
             if os.path.isdir(item_path):
                 shutil.rmtree(item_path)
-                print(f"✅ Deleted output directory: {item}")
+                print(f"Deleted output directory: {item}")
     except Exception as e:
-        print(f"⚠️ Warning: Error deleting output directories: {e}")
+        print(f"Warning: Error deleting output directories: {e}")
     
     return history
 
@@ -585,7 +585,7 @@ def copy_csv_files_to_neo4j(output_dir: str, job_id: str, container_name: str = 
             
             if result == 0:
                 copied_files.append(csv_file.name)
-                print(f"✅ Copied {csv_file.name} to Neo4j import/{job_id}/")
+                print(f"Copied {csv_file.name} to Neo4j import/{job_id}/")
             else:
                 return {"success": False, "message": f"Failed to copy {csv_file.name}"}
         
@@ -601,14 +601,14 @@ def cleanup_neo4j_import_files(job_id: str, container_name: str = "neo4j-atomspa
         result = os.system(cleanup_cmd)
         
         if result == 0:
-            print(f"✅ Cleaned up Neo4j import files for job {job_id}")
+            print(f"Cleaned up Neo4j import files for job {job_id}")
             return True
         else:
-            print(f"⚠️ Warning: Could not cleanup import files for job {job_id}")
+            print(f"Warning: Could not cleanup import files for job {job_id}")
             return False
             
     except Exception as e:
-        print(f"⚠️ Warning: Error cleaning up import files: {e}")
+        print(f"Warning: Error cleaning up import files: {e}")
         return False
 
 def execute_cypher_file(session, file_path, job_id):
@@ -638,6 +638,110 @@ def execute_cypher_file(session, file_path, job_id):
     except Exception as e:
         print(f"Error executing {file_path}: {e}")
         return {"success": False, "error": str(e)}
+
+@app.post("/api/upload/create-session")
+async def create_upload_session_endpoint():
+    """Create a new upload session"""
+    session_id = create_upload_session()
+    session_dir = os.path.join(BASE_OUTPUT_DIR, "uploads", session_id)
+    os.makedirs(session_dir, exist_ok=True)
+    
+    return {
+        "session_id": session_id,
+        "expires_at": upload_sessions[session_id].expires_at.isoformat(),
+        "upload_url": f"/api/upload/{session_id}/files"
+    }
+
+@app.post("/api/upload/{session_id}/files")
+async def upload_files(
+    session_id: str,
+    files: List[UploadFile] = File(...)
+):
+    """Upload files to a specific session"""
+    session = get_upload_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found or expired")
+    
+    session_dir = os.path.join(BASE_OUTPUT_DIR, "uploads", session_id)
+    uploaded_files = []
+    
+    for file in files:
+        # Check for duplicate filenames
+        if file.filename in session.uploaded_files:
+            raise HTTPException(status_code=400, detail=f"File {file.filename} already uploaded")
+        
+        file_path = os.path.join(session_dir, file.filename)
+        
+        try:
+            with open(file_path, "wb") as f:
+                content = await file.read()
+                f.write(content)
+            
+            session.uploaded_files.append(file.filename)
+            uploaded_files.append({
+                "filename": file.filename,
+                "size": len(content),
+                "uploaded_at": datetime.now(tz=timezone.utc).isoformat()
+            })
+            
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to upload {file.filename}: {str(e)}")
+    
+    return {
+        "session_id": session_id,
+        "uploaded_files": uploaded_files,
+        "total_files": len(session.uploaded_files),
+        "files_in_session": session.uploaded_files
+    }
+
+@app.get("/api/upload/{session_id}/status")
+async def get_upload_status(session_id: str):
+    """Get upload session status and file list"""
+    session = get_upload_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found or expired")
+    
+    session_dir = os.path.join(BASE_OUTPUT_DIR, "uploads", session_id)
+    file_details = []
+    
+    for filename in session.uploaded_files:
+        file_path = os.path.join(session_dir, filename)
+        if os.path.exists(file_path):
+            file_details.append({
+                "filename": filename,
+                "size": os.path.getsize(file_path),
+                "status": "uploaded"
+            })
+    
+    return {
+        "session_id": session_id,
+        "status": session.status,
+        "expires_at": session.expires_at.isoformat(),
+        "files": file_details,
+        "total_files": len(file_details)
+    }
+
+@app.delete("/api/upload/{session_id}/files/{filename}")
+async def delete_uploaded_file(session_id: str, filename: str):
+    """Remove a file from upload session"""
+    session = get_upload_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found or expired")
+    
+    if filename not in session.uploaded_files:
+        raise HTTPException(status_code=404, detail="File not found in session")
+    
+    session_dir = os.path.join(BASE_OUTPUT_DIR, "uploads", session_id)
+    file_path = os.path.join(session_dir, filename)
+    
+    try:
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        session.uploaded_files.remove(filename)
+        
+        return {"message": f"File {filename} removed successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to remove file: {str(e)}")
 
 @app.post("/api/load", response_model=HugeGraphLoadResponse)
 async def load_data(
