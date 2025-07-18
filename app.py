@@ -38,7 +38,7 @@ BASE_OUTPUT_DIR = os.path.abspath(config['paths']['output_dir'])
 ANNOTATION_SERVICE_URL = os.getenv('ANNOTATION_SERVICE_URL')
 ANNOTATION_SERVICE_TIMEOUT = float(os.getenv('ANNOTATION_SERVICE_TIMEOUT'))
 SELECTED_JOB_FILE = os.path.join(BASE_OUTPUT_DIR, "selected_job.txt")
-SESSION_TIMEOUT = timedelta(hours=2) 
+SESSION_TIMEOUT = timedelta(hours=config['uploads']['session_timeout']) 
 
 
 NEO4J_CONFIG = {
@@ -919,7 +919,7 @@ async def load_data(
             success_message = f"Graph generated successfully using {writer_type} writer"
             if neo4j_load_result and neo4j_load_result["status"] == "success":
                 results = neo4j_load_result["results"]
-                success_message += f" and loaded to Neo4j ({results['nodes_loaded']} nodes, {results['edges_loaded']} edges)"
+                success_message += f" and loaded to Neo4j"
 
             session.status = "consumed"
             # Cleanup session files

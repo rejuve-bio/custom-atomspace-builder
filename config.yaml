@@ -7,3 +7,6 @@ cors:
   allow_credentials: true
   allow_methods: ["*"]
   allow_headers: ["*"]
+
+uploads:
+  session_timeout: 2 # hours
