@@ -745,12 +745,22 @@ async def delete_uploaded_file(session_id: str, filename: str):
 
 @app.post("/api/load", response_model=HugeGraphLoadResponse)
 async def load_data(
-    files: List[UploadFile] = File(...),
+    session_id: str = Form(...),
     config: str = Form(...),
     schema_json: str = Form(...),
-    writer_type: str = Form(...)
+    writer_type: str = Form("metta")
 ):
+    """Submit processing job using uploaded files from session"""
+    session = get_upload_session(session_id)
+    if not session:
+        raise HTTPException(status_code=400, detail="Invalid or expired session")
+    
+    if not session.uploaded_files:
+        raise HTTPException(status_code=400, detail="No files uploaded in session")
+    
+    # Move files from upload session to job processing
     job_id = str(uuid.uuid4())
+    session_dir = os.path.join(BASE_OUTPUT_DIR, "uploads", session_id)
     
     try:
         config_data = json.loads(config)
@@ -758,11 +768,13 @@ async def load_data(
         
         with tempfile.TemporaryDirectory() as tmpdir:
             file_mapping = {}
-            for file in files:
-                file_path = os.path.join(tmpdir, file.filename)
-                with open(file_path, "wb") as f:
-                    shutil.copyfileobj(file.file, f)
-                file_mapping[file.filename] = file_path
+            
+            # Copy files from session to temp directory
+            for filename in session.uploaded_files:
+                source_path = os.path.join(session_dir, filename)
+                dest_path = os.path.join(tmpdir, filename)
+                shutil.copy2(source_path, dest_path)
+                file_mapping[filename] = dest_path
             
             schema_groovy = json_to_groovy(schema_data)
             schema_path = os.path.join(tmpdir, f"schema-{job_id}.groovy")
@@ -867,6 +879,8 @@ async def load_data(
             if neo4j_load_result and neo4j_load_result["status"] == "success":
                 results = neo4j_load_result["results"]
                 success_message += f" and loaded to Neo4j ({results['nodes_loaded']} nodes, {results['edges_loaded']} edges)"
+
+            session.status = "consumed"
 
             return HugeGraphLoadResponse(
                 job_id=job_id,
