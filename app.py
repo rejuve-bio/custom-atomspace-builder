@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
 from pydantic import BaseModel
 from typing import Dict, List, Any, Optional, Union
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from enum import Enum
 from neo4j import GraphDatabase
 from dotenv import load_dotenv
@@ -21,7 +21,7 @@ import io
 import humanize
 import httpx
 import yaml
-import logging
+import secrets
 
 load_dotenv()
 
@@ -37,6 +37,10 @@ BASE_OUTPUT_DIR = os.path.abspath(config['paths']['output_dir'])
 ANNOTATION_SERVICE_URL = os.getenv('ANNOTATION_SERVICE_URL')
 ANNOTATION_SERVICE_TIMEOUT = float(os.getenv('ANNOTATION_SERVICE_TIMEOUT'))
 SELECTED_JOB_FILE = os.path.join(BASE_OUTPUT_DIR, "selected_job.txt")
+SESSION_TIMEOUT = timedelta(hours=2) 
+
+# For future: use redis session management
+upload_sessions = {}
 
 NEO4J_CONFIG = {
     "host": os.getenv('NEO4J_HOST'),
@@ -132,6 +136,34 @@ class HugeGraphLoadResponse(BaseModel):
 
 class JobSelectionRequest(BaseModel):
     job_id: str
+
+class UploadSession(BaseModel):
+    session_id: str
+    created_at: datetime
+    expires_at: datetime
+    uploaded_files: List[str] = []
+    status: str = "active"  # active, expired, consumed
+    metadata: Dict[str, Any] = {}
+
+def create_upload_session() -> str:
+    session_id = secrets.token_urlsafe(32)
+    session = UploadSession(
+        session_id=session_id,
+        created_at=datetime.now(tz=timezone.utc),
+        expires_at=datetime.now(tz=timezone.utc) + SESSION_TIMEOUT,
+        uploaded_files=[],
+        status="active"
+    )
+    upload_sessions[session_id] = session
+    return session_id
+
+def get_upload_session(session_id: str) -> Optional[UploadSession]:
+    session = upload_sessions.get(session_id)
+    if session and session.expires_at > datetime.now(tz=timezone.utc):
+        return session
+    elif session:
+        session.status = "expired"
+    return None
 
 def json_to_groovy(schema_json: Union[Dict, SchemaDefinition]) -> str:
     if isinstance(schema_json, dict):
