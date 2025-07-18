@@ -1,3 +1,4 @@
+import asyncio
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException
 from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
 from contextlib import asynccontextmanager
@@ -5,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
 from pydantic import BaseModel
 from typing import Dict, List, Any, Optional, Union
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from enum import Enum
 from neo4j import GraphDatabase
 from dotenv import load_dotenv
@@ -21,7 +22,7 @@ import io
 import humanize
 import httpx
 import yaml
-import logging
+import secrets
 
 load_dotenv()
 
@@ -37,6 +38,8 @@ BASE_OUTPUT_DIR = os.path.abspath(config['paths']['output_dir'])
 ANNOTATION_SERVICE_URL = os.getenv('ANNOTATION_SERVICE_URL')
 ANNOTATION_SERVICE_TIMEOUT = float(os.getenv('ANNOTATION_SERVICE_TIMEOUT'))
 SELECTED_JOB_FILE = os.path.join(BASE_OUTPUT_DIR, "selected_job.txt")
+SESSION_TIMEOUT = timedelta(hours=config['uploads']['session_timeout']) 
+
 
 NEO4J_CONFIG = {
     "host": os.getenv('NEO4J_HOST'),
@@ -45,6 +48,9 @@ NEO4J_CONFIG = {
     "password": os.getenv('NEO4J_PASSWORD'),
     "database": os.getenv('NEO4J_DATABASE')
 }
+
+neo4j_driver = None
+upload_sessions = {}
 
 def initialize_neo4j_driver():
     global neo4j_driver
@@ -67,19 +73,57 @@ def initialize_neo4j_driver():
         print("Neo4j features will be disabled until connection is restored")
         return False
 
-neo4j_driver = None
+async def session_cleanup_worker():
+    """Background task to cleanup expired upload sessions"""
+    while True:
+        try:
+            now = datetime.now(tz=timezone.utc)
+            expired_sessions = [
+                sid for sid, session in upload_sessions.items()
+                if session.expires_at < now and session.status == "active"
+            ]
+            
+            for session_id in expired_sessions:
+                upload_sessions[session_id].status = "expired"
+                session_dir = os.path.join(BASE_OUTPUT_DIR, "uploads", session_id)
+                if os.path.exists(session_dir):
+                    shutil.rmtree(session_dir, ignore_errors=True)
+            
+            if expired_sessions:
+                print(f"Cleaned up {len(expired_sessions)} expired upload sessions")
+                
+        except asyncio.CancelledError:
+            print("Session cleanup task cancelled")
+            break
+        except Exception as e:
+            print(f"Error in session cleanup: {e}")
+        
+        await asyncio.sleep(300)  # Check every 5 minutes
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
     initialize_neo4j_driver()
+    
+    # Start session cleanup task
+    cleanup_task = asyncio.create_task(session_cleanup_worker())
+    
     yield
+    
     # Shutdown
+    cleanup_task.cancel()  # Stop cleanup task
+    try:
+        await cleanup_task
+    except asyncio.CancelledError:
+        pass
+    
     if neo4j_driver:
         neo4j_driver.close()
         print("Neo4j driver closed")
 
 app = FastAPI(title="Custom AtomSpace Builder API", lifespan=lifespan)
-
+    
 app.add_middleware(
     CORSMiddleware,
     allow_origins=config['cors']['allow_origins'],
@@ -132,6 +176,34 @@ class HugeGraphLoadResponse(BaseModel):
 
 class JobSelectionRequest(BaseModel):
     job_id: str
+
+class UploadSession(BaseModel):
+    session_id: str
+    created_at: datetime
+    expires_at: datetime
+    uploaded_files: List[str] = []
+    status: str = "active"  # active, expired, consumed
+    metadata: Dict[str, Any] = {}
+
+def create_upload_session() -> str:
+    session_id = secrets.token_urlsafe(32)
+    session = UploadSession(
+        session_id=session_id,
+        created_at=datetime.now(tz=timezone.utc),
+        expires_at=datetime.now(tz=timezone.utc) + SESSION_TIMEOUT,
+        uploaded_files=[],
+        status="active"
+    )
+    upload_sessions[session_id] = session
+    return session_id
+
+def get_upload_session(session_id: str) -> Optional[UploadSession]:
+    session = upload_sessions.get(session_id)
+    if session and session.expires_at > datetime.now(tz=timezone.utc):
+        return session
+    elif session:
+        session.status = "expired"
+    return None
 
 def json_to_groovy(schema_json: Union[Dict, SchemaDefinition]) -> str:
     if isinstance(schema_json, dict):
@@ -453,9 +525,9 @@ def clear_history():
             item_path = os.path.join(BASE_OUTPUT_DIR, item)
             if os.path.isdir(item_path):
                 shutil.rmtree(item_path)
-                print(f"✅ Deleted output directory: {item}")
+                print(f"Deleted output directory: {item}")
     except Exception as e:
-        print(f"⚠️ Warning: Error deleting output directories: {e}")
+        print(f"Warning: Error deleting output directories: {e}")
     
     return history
 
@@ -553,7 +625,7 @@ def copy_csv_files_to_neo4j(output_dir: str, job_id: str, container_name: str = 
             
             if result == 0:
                 copied_files.append(csv_file.name)
-                print(f"✅ Copied {csv_file.name} to Neo4j import/{job_id}/")
+                print(f"Copied {csv_file.name} to Neo4j import/{job_id}/")
             else:
                 return {"success": False, "message": f"Failed to copy {csv_file.name}"}
         
@@ -569,14 +641,14 @@ def cleanup_neo4j_import_files(job_id: str, container_name: str = "neo4j-atomspa
         result = os.system(cleanup_cmd)
         
         if result == 0:
-            print(f"✅ Cleaned up Neo4j import files for job {job_id}")
+            print(f"Cleaned up Neo4j import files for job {job_id}")
             return True
         else:
-            print(f"⚠️ Warning: Could not cleanup import files for job {job_id}")
+            print(f"Warning: Could not cleanup import files for job {job_id}")
             return False
             
     except Exception as e:
-        print(f"⚠️ Warning: Error cleaning up import files: {e}")
+        print(f"Warning: Error cleaning up import files: {e}")
         return False
 
 def execute_cypher_file(session, file_path, job_id):
@@ -607,14 +679,129 @@ def execute_cypher_file(session, file_path, job_id):
         print(f"Error executing {file_path}: {e}")
         return {"success": False, "error": str(e)}
 
+
+@app.post("/api/upload/create-session")
+async def create_upload_session_endpoint():
+    """Create a new upload session"""
+    session_id = create_upload_session()
+    session_dir = os.path.join(BASE_OUTPUT_DIR, "uploads", session_id)
+    os.makedirs(session_dir, exist_ok=True)
+    
+    return {
+        "session_id": session_id,
+        "expires_at": upload_sessions[session_id].expires_at.isoformat(),
+        "upload_url": f"/api/upload/{session_id}/files"
+    }
+
+@app.post("/api/upload/{session_id}/files")
+async def upload_files(
+    session_id: str,
+    files: List[UploadFile] = File(...)
+):
+    """Upload files to a specific session"""
+    session = get_upload_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found or expired")
+    
+    session_dir = os.path.join(BASE_OUTPUT_DIR, "uploads", session_id)
+    uploaded_files = []
+    
+    for file in files:
+        # Check for duplicate filenames
+        if file.filename in session.uploaded_files:
+            raise HTTPException(status_code=400, detail=f"File {file.filename} already uploaded")
+        
+        file_path = os.path.join(session_dir, file.filename)
+        
+        try:
+            with open(file_path, "wb") as f:
+                content = await file.read()
+                f.write(content)
+            
+            session.uploaded_files.append(file.filename)
+            uploaded_files.append({
+                "filename": file.filename,
+                "size": len(content),
+                "uploaded_at": datetime.now(tz=timezone.utc).isoformat()
+            })
+            
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to upload {file.filename}: {str(e)}")
+    
+    return {
+        "session_id": session_id,
+        "uploaded_files": uploaded_files,
+        "total_files": len(session.uploaded_files),
+        "files_in_session": session.uploaded_files
+    }
+
+@app.get("/api/upload/{session_id}/status")
+async def get_upload_status(session_id: str):
+    """Get upload session status and file list"""
+    session = get_upload_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found or expired")
+    
+    session_dir = os.path.join(BASE_OUTPUT_DIR, "uploads", session_id)
+    file_details = []
+    
+    for filename in session.uploaded_files:
+        file_path = os.path.join(session_dir, filename)
+        if os.path.exists(file_path):
+            file_details.append({
+                "filename": filename,
+                "size": os.path.getsize(file_path),
+                "status": "uploaded"
+            })
+    
+    return {
+        "session_id": session_id,
+        "status": session.status,
+        "expires_at": session.expires_at.isoformat(),
+        "files": file_details,
+        "total_files": len(file_details)
+    }
+
+@app.delete("/api/upload/{session_id}/files/{filename}")
+async def delete_uploaded_file(session_id: str, filename: str):
+    """Remove a file from upload session"""
+    session = get_upload_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found or expired")
+    
+    if filename not in session.uploaded_files:
+        raise HTTPException(status_code=404, detail="File not found in session")
+    
+    session_dir = os.path.join(BASE_OUTPUT_DIR, "uploads", session_id)
+    file_path = os.path.join(session_dir, filename)
+    
+    try:
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        session.uploaded_files.remove(filename)
+        
+        return {"message": f"File {filename} removed successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to remove file: {str(e)}")
+
 @app.post("/api/load", response_model=HugeGraphLoadResponse)
 async def load_data(
-    files: List[UploadFile] = File(...),
+    session_id: str = Form(...),
     config: str = Form(...),
     schema_json: str = Form(...),
-    writer_type: str = Form(...)
+    writer_type: str = Form("metta")
 ):
+    """Submit processing job using uploaded files from session"""
+    session = get_upload_session(session_id)
+    if not session:
+        raise HTTPException(status_code=400, detail="Invalid or expired session")
+    
+    if not session.uploaded_files:
+        raise HTTPException(status_code=400, detail="No files uploaded in session")
+    
+    # Move files from upload session to job processing
     job_id = str(uuid.uuid4())
+    session_dir = os.path.join(BASE_OUTPUT_DIR, "uploads", session_id)
     
     try:
         config_data = json.loads(config)
@@ -622,11 +809,13 @@ async def load_data(
         
         with tempfile.TemporaryDirectory() as tmpdir:
             file_mapping = {}
-            for file in files:
-                file_path = os.path.join(tmpdir, file.filename)
-                with open(file_path, "wb") as f:
-                    shutil.copyfileobj(file.file, f)
-                file_mapping[file.filename] = file_path
+            
+            # Copy files from session to temp directory
+            for filename in session.uploaded_files:
+                source_path = os.path.join(session_dir, filename)
+                dest_path = os.path.join(tmpdir, filename)
+                shutil.copy2(source_path, dest_path)
+                file_mapping[filename] = dest_path
             
             schema_groovy = json_to_groovy(schema_data)
             schema_path = os.path.join(tmpdir, f"schema-{job_id}.groovy")
@@ -730,7 +919,11 @@ async def load_data(
             success_message = f"Graph generated successfully using {writer_type} writer"
             if neo4j_load_result and neo4j_load_result["status"] == "success":
                 results = neo4j_load_result["results"]
-                success_message += f" and loaded to Neo4j ({results['nodes_loaded']} nodes, {results['edges_loaded']} edges)"
+                success_message += f" and loaded to Neo4j"
+
+            session.status = "consumed"
+            # Cleanup session files
+            shutil.rmtree(session_dir, ignore_errors=True)
 
             return HugeGraphLoadResponse(
                 job_id=job_id,
@@ -955,10 +1148,6 @@ async def get_neo4j_config():
 async def health_check():
     return {"status": "ok"}
 
-@app.on_event("shutdown")
-async def shutdown_event():
-    if neo4j_driver:
-        neo4j_driver.close()
 
 if __name__ == "__main__":
     import uvicorn
