@@ -483,8 +483,8 @@ def generate_annotation_schema(schema_data: dict, job_id: str) -> dict:
     
     return annotation_schema
 
-async def notify_annotation_service(job_id: str) -> Optional[str]:
-    payload = {"folder_id": job_id}
+async def notify_annotation_service(job_id: str, writer_type: str) -> Optional[str]:
+    payload = {"folder_id": job_id, "type": writer_type}
     try:
         async with httpx.AsyncClient() as client:
             response = await client.post(
@@ -901,11 +901,11 @@ async def load_data(
                     with open(neo4j_result_path, "w") as f:
                         json.dump(neo4j_load_result, f, indent=2)
             
-            error_msg = await notify_annotation_service(job_id)
+            error_msg = await notify_annotation_service(job_id, writer_type)
             if error_msg:
                 selected_job_id = get_selected_job_id()
                 if selected_job_id:
-                    await notify_annotation_service(selected_job_id)
+                    await notify_annotation_service(selected_job_id, writer_type)
                 if os.path.exists(output_dir):
                     shutil.rmtree(output_dir, ignore_errors=True)
                 raise HTTPException(status_code=500, detail={"message": error_msg, "job_id": job_id})
