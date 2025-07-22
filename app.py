@@ -946,11 +946,11 @@ async def load_data(
 @app.post("/api/select-job")
 async def select_job(request: JobSelectionRequest):
     job_id = request.job_id
-
+    writer_type = get_writer_type_from_job(job_id)
     if not os.path.exists(get_job_output_dir(job_id)):
         raise HTTPException(status_code=404, detail=f"Job ID {job_id} does not exist")
     
-    error_msg = await notify_annotation_service(job_id)
+    error_msg = await notify_annotation_service(job_id, writer_type)
     if error_msg:
         raise HTTPException(status_code=500, detail=f"Error connecting annotation service: {error_msg}")
     
@@ -1054,6 +1054,21 @@ async def get_graph_info(job_id: str = None):
     except Exception as e:
         print(f"Error in get_graph_info: {str(e)}")
         return empty_response
+
+
+def get_writer_type_from_job(job_id: str) -> Optional[str]:
+    job_metadata_path = os.path.join(get_job_output_dir(job_id), "job_metadata.json")
+    try:
+        with open(job_metadata_path, 'r') as f:
+            job_metadata = json.load(f)
+            return job_metadata.get("writer_type", "metta")
+    except Exception as e:
+        print(f"Error reading job metadata for {job_id}: {e} in get_writer_type_from_job")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error reading job metadata for {job_id}: {str(e)} in get_writer_type_from_job"
+        )
+    
 
 @app.get("/api/schema/{job_id}", response_class=JSONResponse)
 @app.get("/api/schema/", response_class=JSONResponse)
