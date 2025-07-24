@@ -30,6 +30,7 @@ load_dotenv()
 with open("config.yaml", "r") as f:
     config = yaml.safe_load(f)
 
+
 HUGEGRAPH_LOADER_PATH = config['paths']['hugegraph_loader']
 HUGEGRAPH_HOST = os.getenv('HUGEGRAPH_HOST')
 HUGEGRAPH_PORT = os.getenv('HUGEGRAPH_PORT')

@@ -140,7 +140,15 @@ uvicorn app:app --host 0.0.0.0 --port 8001 --reload
 
 ## API Endpoints
 
+### Session Management
+- `POST /api/upload/create-session` - Create a new upload session
+- `POST /api/upload/{session_id}/files` - Upload files to a session
+- `GET /api/upload/{session_id}/status` - Get session status
+- `DELETE /api/upload/{session_id}/files/{filename}` - Delete a file from session
+
 ### Data Loading
+- `POST /api/load` - Load data files into HugeGraph (requires session_id)
+- `POST /api/convert-schema` - Convert JSON schema to Groovy format
 - `POST /api/load` - Load data files with configurable writer type and session ID
 - `POST /api/upload-files` - Upload input files separately with session tracking
 - `POST /api/submit-schema` - Submit schema/configuration for a session
@@ -168,6 +176,16 @@ uvicorn app:app --host 0.0.0.0 --port 8001 --reload
 ### Loading Data with Session ID
 
 ```bash
+# 1. Create an upload session
+curl -X POST "http://localhost:8000/api/upload/create-session"
+
+# 2. Upload files to the session (replace SESSION_ID with the returned session ID)
+curl -X POST "http://localhost:8000/api/upload/SESSION_ID/files" \
+  -F "files=@data.csv"
+
+# 3. Load data using the session
+curl -X POST "http://localhost:8000/api/load" \
+  -F "session_id=SESSION_ID" \
 curl -X POST "http://100.67.47.42:8001/api/load" \
   -F "files=@data.csv" \
   -F "config=$(cat struct.json)" \
