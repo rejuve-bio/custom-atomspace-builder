@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  # Override API service for development
+  api:
+    volumes:
+      - .:/app
+      - ./output:/app/output
+      - ./hugegraph-loader:/app/hugegraph-loader
+    environment:
+      - PYTHONPATH=/app
+    command: ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    profiles:
+      - dev
+
+  # Override Neo4j for development (reduced memory)
+  neo4j:
+    environment:
+      - NEO4J_dbms_memory_heap_initial__size=256m
+      - NEO4J_dbms_memory_heap_max__size=1G
+      - NEO4J_dbms_memory_pagecache_size=256m
+    profiles:
+      - dev
+
+  # Override HugeGraph for development
+  hugegraph:
+    environment:
+      - HUGEGRAPH_GRAPH_NAME=hugegraph
+    profiles:
+      - dev
+
+  # Development tools
+  dev-tools:
+    image: busybox:latest
+    container_name: dev-tools
+    command: ["sh", "-c", "echo 'Development tools container' && sleep infinity"]
+    volumes:
+      - .:/workspace
+    networks:
+      - atomspace-network
+    profiles:
+      - dev
+      - tools 
