@@ -15,7 +15,7 @@ services:
       - neo4j_plugins:/plugins
     environment:
       # Authentication
-      - NEO4J_AUTH=neo4j/atomspace123
+      - NEO4J_AUTH=neo4j/atomspace123  
       
       # Memory settings
       - NEO4J_dbms_memory_heap_initial__size=512m
