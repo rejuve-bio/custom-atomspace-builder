@@ -483,8 +483,8 @@ def generate_annotation_schema(schema_data: dict, job_id: str) -> dict:
     
     return annotation_schema
 
-async def notify_annotation_service(job_id: str) -> Optional[str]:
-    payload = {"folder_id": job_id}
+async def notify_annotation_service(job_id: str, writer_type: str) -> Optional[str]:
+    payload = {"folder_id": job_id, "type": writer_type}
     try:
         async with httpx.AsyncClient() as client:
             response = await client.post(
@@ -693,9 +693,9 @@ async def create_upload_session_endpoint():
         "upload_url": f"/api/upload/{session_id}/files"
     }
 
-@app.post("/api/upload/{session_id}/files")
+@app.post("/api/upload/files")
 async def upload_files(
-    session_id: str,
+    session_id: str = Form(...),
     files: List[UploadFile] = File(...)
 ):
     """Upload files to a specific session"""
@@ -901,11 +901,11 @@ async def load_data(
                     with open(neo4j_result_path, "w") as f:
                         json.dump(neo4j_load_result, f, indent=2)
             
-            error_msg = await notify_annotation_service(job_id)
+            error_msg = await notify_annotation_service(job_id, writer_type)
             if error_msg:
                 selected_job_id = get_selected_job_id()
                 if selected_job_id:
-                    await notify_annotation_service(selected_job_id)
+                    await notify_annotation_service(selected_job_id, writer_type)
                 if os.path.exists(output_dir):
                     shutil.rmtree(output_dir, ignore_errors=True)
                 raise HTTPException(status_code=500, detail={"message": error_msg, "job_id": job_id})
@@ -946,11 +946,11 @@ async def load_data(
 @app.post("/api/select-job")
 async def select_job(request: JobSelectionRequest):
     job_id = request.job_id
-
+    writer_type = get_writer_type_from_job(job_id)
     if not os.path.exists(get_job_output_dir(job_id)):
         raise HTTPException(status_code=404, detail=f"Job ID {job_id} does not exist")
     
-    error_msg = await notify_annotation_service(job_id)
+    error_msg = await notify_annotation_service(job_id, writer_type)
     if error_msg:
         raise HTTPException(status_code=500, detail=f"Error connecting annotation service: {error_msg}")
     
@@ -1055,6 +1055,21 @@ async def get_graph_info(job_id: str = None):
         print(f"Error in get_graph_info: {str(e)}")
         return empty_response
 
+
+def get_writer_type_from_job(job_id: str) -> Optional[str]:
+    job_metadata_path = os.path.join(get_job_output_dir(job_id), "job_metadata.json")
+    try:
+        with open(job_metadata_path, 'r') as f:
+            job_metadata = json.load(f)
+            return job_metadata.get("writer_type", "metta")
+    except Exception as e:
+        print(f"Error reading job metadata for {job_id}: {e} in get_writer_type_from_job")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error reading job metadata for {job_id}: {str(e)} in get_writer_type_from_job"
+        )
+    
+
 @app.get("/api/schema/{job_id}", response_class=JSONResponse)
 @app.get("/api/schema/", response_class=JSONResponse)
 async def get_annotation_schema(job_id: str = None):
@@ -1091,8 +1106,31 @@ async def get_annotation_schema(job_id: str = None):
         print(f"Error in get_annotation_schema: {str(e)}")
         return empty_response
 
-@app.delete("/api/history/{job_id}")
-async def delete_job_history_endpoint(job_id: str):
+def delete_neo4j_subgraph(job_id: str):
+    """Delete all nodes and relationships in Neo4j with tenant_id == job_id"""
+    if not neo4j_driver:
+        print("Neo4j driver is not initialized. Skipping deletion.")
+        return
+
+    try:
+        with neo4j_driver.session(database=NEO4J_CONFIG["database"]) as session:
+            delete_query = """
+            MATCH (n) 
+            WHERE n.tenant_id = $tenant_id 
+            DETACH DELETE n
+            """
+            session.run(delete_query, tenant_id=job_id)
+            print(f"Deleted Neo4j subgraph for tenant_id/job_id: {job_id}")
+    except Exception as e:
+        print(f"Error deleting Neo4j subgraph for job_id {job_id}: {str(e)}")
+
+
+@app.delete("/api/delete-job/{job_id}", response_class=JSONResponse)
+async def delete_job(job_id: str):
+    writer_type = get_writer_type_from_job(job_id)
+
+    if writer_type == WriterType.NEO4J:
+        delete_neo4j_subgraph(job_id)
     updated_history, selected_job_affected = delete_job_history(job_id)
     
     job_dir = get_job_output_dir(job_id)

@@ -1,10 +1,11 @@
 package org.apache.hugegraph.loader.writer;
 
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
+import java.io.RandomAccessFile;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -17,14 +18,32 @@ public class Neo4jCSVWriter {
     
     private static final String CSV_DELIMITER = "|";
     private static final String ARRAY_DELIMITER = ";";
+    private static final String EDGE_KEY_DELIMITER = "_";
     
     private final String OUTPUT_DIR;
     private final String JOB_ID;
-    private final Map<String, Set<String>> nodeHeaders = new ConcurrentHashMap<>();
-    private final Map<String, Set<String>> edgeHeaders = new ConcurrentHashMap<>();
-    private final Map<String, String> edgeNodeTypes = new ConcurrentHashMap<>();
-    private final int batchSize = 10000;
     
+    // Use the same locking approach as MeTTaWriter
+    private static final ConcurrentHashMap<String, Object> FILE_LOCKS = new ConcurrentHashMap<>();
+    private final Map<String, EdgeInfo> edgeInfoMap = new ConcurrentHashMap<>();
+    
+    // Put the EdgeInfo class here as a private static nested class
+    private static class EdgeInfo {
+        final String label;
+        final String sourceType;
+        final String targetType;
+        
+        EdgeInfo(String label, String sourceType, String targetType) {
+            this.label = label;
+            this.sourceType = sourceType;
+            this.targetType = targetType;
+        }
+        
+        String getKey() {
+            return label + EDGE_KEY_DELIMITER + sourceType + EDGE_KEY_DELIMITER + targetType;
+        }
+    }
+
     public Neo4jCSVWriter(String outputDir, String jobId) {
         this.OUTPUT_DIR = outputDir;
         this.JOB_ID = jobId;
@@ -49,7 +68,7 @@ public class Neo4jCSVWriter {
             String cypherPath = OUTPUT_DIR + "/nodes_" + label + ".cypher";
             
             try {
-                writeNodeCSV(label, nodes, csvPath);
+                writeNodeCSVWithLock(label, nodes, csvPath);
                 writeNodeCypher(label, csvPath, cypherPath);
             } catch (IOException e) {
                 throw new RuntimeException("Failed to write nodes for label: " + label, e);
@@ -71,7 +90,7 @@ public class Neo4jCSVWriter {
             String cypherPath = OUTPUT_DIR + "/edges_" + edgeKey + ".cypher";
             
             try {
-                writeEdgeCSV(edgeKey, edges, csvPath);
+                writeEdgeCSVWithLock(edgeKey, edges, csvPath);
                 writeEdgeCypher(edgeKey, csvPath, cypherPath);
             } catch (IOException e) {
                 throw new RuntimeException("Failed to write edges for type: " + edgeKey, e);
@@ -79,64 +98,113 @@ public class Neo4jCSVWriter {
         }
     }
     
-    private void writeNodeCSV(String label, List<Map<String, Object>> nodes, String csvPath) throws IOException {
-        Set<String> headers = new HashSet<>();
-        headers.add("id");
+    /**
+     * Thread-safe node CSV writing using the same pattern as MeTTaWriter
+     */
+    private void writeNodeCSVWithLock(String label, List<Map<String, Object>> nodes, String csvPath) throws IOException {
+        // Get or create a lock object for this file (same as MeTTaWriter)
+        Object fileLock = FILE_LOCKS.computeIfAbsent(csvPath, k -> new Object());
         
-        // Collect all possible headers
-        for (Map<String, Object> node : nodes) {
-            headers.addAll(node.keySet());
-        }
-        
-        List<String> sortedHeaders = new ArrayList<>(headers);
-        Collections.sort(sortedHeaders);
-        
-        try (FileWriter writer = new FileWriter(csvPath)) {
-            // Write header
-            writer.write(String.join(CSV_DELIMITER, sortedHeaders) + "\n");
-            
-            // Write data
-            for (Map<String, Object> node : nodes) {
-                List<String> values = new ArrayList<>();
-                for (String header : sortedHeaders) {
-                    Object value = node.get(header);
-                    values.add(preprocessValue(value));
+        synchronized (fileLock) {
+            try (RandomAccessFile file = new RandomAccessFile(csvPath, "rw");
+                 FileChannel channel = file.getChannel();
+                 FileLock lock = channel.lock()) {
+                
+                boolean isNewFile = file.length() == 0;
+                
+                // Move to the end of the file
+                file.seek(file.length());
+                
+                // Collect all headers
+                Set<String> headers = new HashSet<>();
+                headers.add("id");
+                for (Map<String, Object> node : nodes) {
+                    headers.addAll(node.keySet());
                 }
-                writer.write(String.join(CSV_DELIMITER, values) + "\n");
+                
+                List<String> sortedHeaders = new ArrayList<>(headers);
+                Collections.sort(sortedHeaders);
+                
+                StringBuilder content = new StringBuilder();
+                
+                // Write header if new file
+                if (isNewFile) {
+                    content.append(String.join(CSV_DELIMITER, sortedHeaders)).append("\n");
+                }
+                
+                // Write all data in one operation
+                for (Map<String, Object> node : nodes) {
+                    List<String> values = new ArrayList<>();
+                    for (String header : sortedHeaders) {
+                        Object value = node.get(header);
+                        values.add(preprocessValue(value));
+                    }
+                    content.append(String.join(CSV_DELIMITER, values)).append("\n");
+                }
+                
+                // Write the entire content at once
+                file.write(content.toString().getBytes());
+                
+                // Force changes to be written to the disk
+                channel.force(true);
             }
         }
     }
     
-    private void writeEdgeCSV(String edgeKey, List<Map<String, Object>> edges, String csvPath) throws IOException {
-        Set<String> headers = new HashSet<>();
-        headers.addAll(Arrays.asList("source_id", "target_id", "label", "source_type", "target_type"));
+    /**
+     * Thread-safe edge CSV writing using the same pattern as MeTTaWriter
+     */
+    private void writeEdgeCSVWithLock(String edgeKey, List<Map<String, Object>> edges, String csvPath) throws IOException {
+        // Get or create a lock object for this file (same as MeTTaWriter)
+        Object fileLock = FILE_LOCKS.computeIfAbsent(csvPath, k -> new Object());
         
-        // Collect all possible headers
-        for (Map<String, Object> edge : edges) {
-            headers.addAll(edge.keySet());
-        }
-        
-        List<String> sortedHeaders = new ArrayList<>(headers);
-        Collections.sort(sortedHeaders);
-        
-        try (FileWriter writer = new FileWriter(csvPath)) {
-            // Write header
-            writer.write(String.join(CSV_DELIMITER, sortedHeaders) + "\n");
-            
-            // Write data
-            for (Map<String, Object> edge : edges) {
-                List<String> values = new ArrayList<>();
-                for (String header : sortedHeaders) {
-                    Object value = edge.get(header);
-                    values.add(preprocessValue(value));
+        synchronized (fileLock) {
+            try (RandomAccessFile file = new RandomAccessFile(csvPath, "rw");
+                 FileChannel channel = file.getChannel();
+                 FileLock lock = channel.lock()) {
+                
+                boolean isNewFile = file.length() == 0;
+                
+                // Move to the end of the file
+                file.seek(file.length());
+                
+                // Collect all headers
+                Set<String> headers = new HashSet<>();
+                headers.addAll(Arrays.asList("source_id", "target_id", "label", "source_type", "target_type"));
+                for (Map<String, Object> edge : edges) {
+                    headers.addAll(edge.keySet());
                 }
-                writer.write(String.join(CSV_DELIMITER, values) + "\n");
+                
+                List<String> sortedHeaders = new ArrayList<>(headers);
+                Collections.sort(sortedHeaders);
+                
+                StringBuilder content = new StringBuilder();
+                
+                // Write header if new file
+                if (isNewFile) {
+                    content.append(String.join(CSV_DELIMITER, sortedHeaders)).append("\n");
+                }
+                
+                // Write all data in one operation
+                for (Map<String, Object> edge : edges) {
+                    List<String> values = new ArrayList<>();
+                    for (String header : sortedHeaders) {
+                        Object value = edge.get(header);
+                        values.add(preprocessValue(value));
+                    }
+                    content.append(String.join(CSV_DELIMITER, values)).append("\n");
+                }
+                
+                // Write the entire content at once
+                file.write(content.toString().getBytes());
+                
+                // Force changes to be written to the disk
+                channel.force(true);
             }
         }
     }
     
     private void writeNodeCypher(String label, String csvPath, String cypherPath) throws IOException {
-        String absolutePath = new File(csvPath).getAbsolutePath();
         String csvFileName = this.JOB_ID + "/" + new File(csvPath).getName();
         
         String cypherQuery = String.format(
@@ -148,20 +216,28 @@ public class Neo4jCSVWriter {
             csvFileName, CSV_DELIMITER, label, this.JOB_ID
         );
         
-        try (FileWriter writer = new FileWriter(cypherPath)) {
-            writer.write(cypherQuery);
+        // Use the same locking approach for cypher files
+        Object fileLock = FILE_LOCKS.computeIfAbsent(cypherPath, k -> new Object());
+        
+        synchronized (fileLock) {
+            try (RandomAccessFile file = new RandomAccessFile(cypherPath, "rw");
+                 FileChannel channel = file.getChannel();
+                 FileLock lock = channel.lock()) {
+                
+                file.write(cypherQuery.getBytes());
+                channel.force(true);
+            }
         }
     }
     
     private void writeEdgeCypher(String edgeKey, String csvPath, String cypherPath) throws IOException {
-        String absolutePath = new File(csvPath).getAbsolutePath();
         String csvFileName = this.JOB_ID + "/" + new File(csvPath).getName();
         
-        // Extract edge information from key (format: label_sourceType_targetType)
-        String[] parts = edgeKey.split("_");
-        String edgeLabel = parts[0];
-        String sourceType = parts[1];
-        String targetType = parts[2];
+        // Get edge info from stored metadata
+        EdgeInfo edgeInfo = edgeInfoMap.get(edgeKey);
+        if (edgeInfo == null) {
+            throw new RuntimeException("Edge info not found for key: " + edgeKey);
+        }
         
         String cypherQuery = String.format(
             "CALL apoc.periodic.iterate(\n" +
@@ -171,11 +247,20 @@ public class Neo4jCSVWriter {
             "  \"SET r += apoc.map.removeKeys(row, ['source_id', 'target_id', 'label', 'source_type', 'target_type'])\",\n" +
             "  {batchSize:1000}\n" +
             ") YIELD batches, total RETURN batches, total;",
-            csvFileName, CSV_DELIMITER, sourceType, this.JOB_ID, targetType, this.JOB_ID, edgeLabel, this.JOB_ID
+            csvFileName, CSV_DELIMITER, edgeInfo.sourceType, this.JOB_ID, edgeInfo.targetType, this.JOB_ID, edgeInfo.label, this.JOB_ID
         );
         
-        try (FileWriter writer = new FileWriter(cypherPath)) {
-            writer.write(cypherQuery);
+        // Use the same locking approach for cypher files
+        Object fileLock = FILE_LOCKS.computeIfAbsent(cypherPath, k -> new Object());
+        
+        synchronized (fileLock) {
+            try (RandomAccessFile file = new RandomAccessFile(cypherPath, "rw");
+                 FileChannel channel = file.getChannel();
+                 FileLock lock = channel.lock()) {
+                
+                file.write(cypherQuery.getBytes());
+                channel.force(true);
+            }
         }
     }
     
@@ -207,7 +292,7 @@ public class Neo4jCSVWriter {
         
         for (Record record : records) {
             Vertex vertex = (Vertex) record.element();
-            String label = vertex.label().toLowerCase();
+            String label = vertex.label();
             
             Map<String, Object> nodeData = new HashMap<>();
             nodeData.put("id", preprocessId(vertex.id().toString()));
@@ -224,11 +309,15 @@ public class Neo4jCSVWriter {
         
         for (Record record : records) {
             Edge edge = (Edge) record.element();
-            String label = edge.label().toLowerCase();
-            String sourceLabel = edge.sourceLabel().toLowerCase();
-            String targetLabel = edge.targetLabel().toLowerCase();
+            String label = edge.label();
+            String sourceLabel = edge.sourceLabel();
+            String targetLabel = edge.targetLabel();
             
-            String edgeKey = label + "_" + sourceLabel + "_" + targetLabel;
+            EdgeInfo edgeInfo = new EdgeInfo(label, sourceLabel, targetLabel);
+            String edgeKey = edgeInfo.getKey();
+            
+            // Store edge info for later use
+            edgeInfoMap.put(edgeKey, edgeInfo);
             
             Map<String, Object> edgeData = new HashMap<>();
             edgeData.put("source_id", preprocessId(edge.sourceId().toString()));
