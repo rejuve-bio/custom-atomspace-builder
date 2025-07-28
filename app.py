@@ -1106,8 +1106,31 @@ async def get_annotation_schema(job_id: str = None):
         print(f"Error in get_annotation_schema: {str(e)}")
         return empty_response
 
-@app.delete("/api/history/{job_id}")
-async def delete_job_history_endpoint(job_id: str):
+def delete_neo4j_subgraph(job_id: str):
+    """Delete all nodes and relationships in Neo4j with tenant_id == job_id"""
+    if not neo4j_driver:
+        print("Neo4j driver is not initialized. Skipping deletion.")
+        return
+
+    try:
+        with neo4j_driver.session(database=NEO4J_CONFIG["database"]) as session:
+            delete_query = """
+            MATCH (n) 
+            WHERE n.tenant_id = $tenant_id 
+            DETACH DELETE n
+            """
+            session.run(delete_query, tenant_id=job_id)
+            print(f"Deleted Neo4j subgraph for tenant_id/job_id: {job_id}")
+    except Exception as e:
+        print(f"Error deleting Neo4j subgraph for job_id {job_id}: {str(e)}")
+
+
+@app.delete("/api/delete-job/{job_id}", response_class=JSONResponse)
+async def delete_job(job_id: str):
+    writer_type = get_writer_type_from_job(job_id)
+
+    if writer_type == WriterType.NEO4J:
+        delete_neo4j_subgraph(job_id)
     updated_history, selected_job_affected = delete_job_history(job_id)
     
     job_dir = get_job_output_dir(job_id)
