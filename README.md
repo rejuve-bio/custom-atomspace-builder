@@ -74,6 +74,12 @@ NEO4J_HOST=localhost
 NEO4J_PORT=7687
 NEO4J_DATABASE=neo4j
 
+# HugeGraph Configuration
+HUGEGRAPH_HOST=localhost
+HUGEGRAPH_PORT=8080
+HUGEGRAPH_GRAPH=hugegraph
+HUGEGRAPH_LOADER_PATH=./hugegraph-loader/apache-hugegraph-loader-incubating-1.5.0/bin/hugegraph-loader.sh
+
 # === HugeGraph settings ===
 HUGEGRAPH_HOST=localhost
 HUGEGRAPH_PORT=8080
