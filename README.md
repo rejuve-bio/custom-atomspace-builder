@@ -302,7 +302,6 @@ The system has been tested with:
 
 ## Roadmap
 
-### Completed
 - [x] Neo4j backend integration for Custom AtomSpace Builder
 - [x] Multi-tenancy support with tenant IDs
 - [x] Docker containerization
