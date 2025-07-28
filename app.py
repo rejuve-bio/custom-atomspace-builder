@@ -693,9 +693,9 @@ async def create_upload_session_endpoint():
         "upload_url": f"/api/upload/{session_id}/files"
     }
 
-@app.post("/api/upload/{session_id}/files")
+@app.post("/api/upload/files")
 async def upload_files(
-    session_id: str,
+    session_id: str = Form(...),
     files: List[UploadFile] = File(...)
 ):
     """Upload files to a specific session"""
