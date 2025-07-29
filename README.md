@@ -16,6 +16,47 @@ This project provides a flexible graph data loading and transformation pipeline 
 - Thread-safe file operations for concurrent processing
 - Direct Neo4j integration with CSV and Cypher file generation
 
+## Project Structure
+
+```
+custom-atomspace-builder/
+├── app/
+│   ├── __init__.py
+│   ├── main.py                 # FastAPI app setup and lifespan
+│   ├── config.py              # Centralized configuration management
+│   │
+│   ├── core/                  # Core functionality
+│   │   ├── database.py        # Neo4j connection management
+│   │   ├── session_manager.py # Upload session management
+│   │   └── background_tasks.py # Background cleanup tasks
+│   │
+│   ├── models/                # Data models
+│   │   ├── schemas.py         # Pydantic models
+│   │   └── enums.py          # Enumerations
+│   │
+│   ├── services/              # Business logic
+│   │   ├── hugegraph_service.py    # HugeGraph operations
+│   │   ├── neo4j_service.py        # Neo4j operations
+│   │   ├── annotation_service.py   # Annotation service communication
+│   │   └── graph_info_service.py   # Graph info generation
+│   │
+│   ├── api/                   # API endpoints
+│   │   ├── upload.py          # Upload endpoints
+│   │   ├── jobs.py            # Job management endpoints
+│   │   ├── graph.py           # Graph info endpoints
+│   │   └── admin.py           # Admin endpoints
+│   │
+│   └── utils/                 # Utilities
+│       ├── file_utils.py      # File operations utilities
+│       ├── schema_converter.py # Schema conversion utilities
+│       └── helpers.py         # General helper functions
+│
+├── config.yaml               # Application configuration
+├── requirements.txt          # Python dependencies
+├── docker-compose.yml        # Docker setup
+└── README.md
+```
+
 ## Features
 
 ### Core Functionality
