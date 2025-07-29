@@ -9,4 +9,4 @@ cors:
   allow_headers: ["*"]
 
 uploads:
-  session_timeout: 2 # hours
+  session_timeout: 24 # hours
