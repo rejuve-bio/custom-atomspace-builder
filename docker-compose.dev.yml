@@ -3,7 +3,7 @@
 services:
   # Main FastAPI application (development mode)
   api:
-    build: 
+    build:
       context: .
       dockerfile: Dockerfile
     container_name: custom-atomspace-api-dev
@@ -33,7 +33,8 @@ services:
     networks:
       - atomspace-network
     restart: unless-stopped
-    command: ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    command:
+      ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "${API_CONTAINER_PORT}", "--reload"]
 
   # Neo4j database (development)
   neo4j:
@@ -41,8 +42,8 @@ services:
     container_name: neo4j-atomspace-dev
     restart: unless-stopped
     ports:
-      - "${NEO4J_HTTP_PORT}:7474"   # HTTP
-      - "${NEO4J_BOLT_PORT}:7687"   # Bolt
+      - "${NEO4J_HTTP_PORT}:7474" # HTTP
+      - "${NEO4J_BOLT_PORT}:7687" # Bolt
     volumes:
       - neo4j_data_dev:/data
       - neo4j_logs_dev:/logs
@@ -51,28 +52,29 @@ services:
     environment:
       # Authentication
       - NEO4J_AUTH=${NEO4J_USERNAME}/${NEO4J_PASSWORD}
-      
+
       # Memory settings (reduced for development)
       - NEO4J_dbms_memory_heap_initial__size=${NEO4J_HEAP_INITIAL_SIZE_DEV}
       - NEO4J_dbms_memory_heap_max__size=${NEO4J_HEAP_MAX_SIZE_DEV}
       - NEO4J_dbms_memory_pagecache_size=${NEO4J_PAGECACHE_SIZE_DEV}
-      
+
       # APOC Plugin
       - NEO4J_PLUGINS=["apoc"]
       - NEO4J_dbms_security_procedures_unrestricted=apoc.*
       - NEO4J_dbms_security_procedures_allowlist=apoc.*
-      
+
       # CSV import settings
       - NEO4J_apoc_import_file_enabled=true
       - NEO4J_apoc_export_file_enabled=true
       - NEO4J_server_directories_import=import
-      
+
       # Performance
       - NEO4J_server_default__listen__address=0.0.0.0
     networks:
       - atomspace-network
     healthcheck:
-      test: ["CMD", "cypher-shell", "-u", "${NEO4J_USERNAME}", "-p", "${NEO4J_PASSWORD}", "RETURN 1"]
+      test:
+        ["CMD", "cypher-shell", "-u", "${NEO4J_USERNAME}", "-p", "${NEO4J_PASSWORD}", "RETURN 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -84,8 +86,8 @@ services:
     container_name: hugegraph-server-dev
     restart: unless-stopped
     ports:
-      - "${HUGEGRAPH_REST_PORT}:8080"   # REST API
-      - "${HUGEGRAPH_WS_PORT}:8182"   # WebSocket
+      - "${HUGEGRAPH_REST_PORT}:8080" # REST API
+      - "${HUGEGRAPH_WS_PORT}:8182" # WebSocket
     volumes:
       - hugegraph_data_dev:/opt/hugegraph/data
       - hugegraph_logs_dev:/opt/hugegraph/logs
@@ -144,4 +146,4 @@ volumes:
 
 networks:
   atomspace-network:
-    driver: bridge 
+    driver: bridge
