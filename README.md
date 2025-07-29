@@ -334,18 +334,14 @@ docker compose -f docker-compose.dev.yml up -d --build
 ### Session Management
 
 - `POST /api/upload/create-session` - Create a new upload session
-- `POST /api/upload/{session_id}/files` - Upload files to a session
-- `GET /api/upload/{session_id}/status` - Get session status
-- `DELETE /api/upload/{session_id}/files/{filename}` - Delete a file from session
+- `POST /api/upload/files` - Upload files to a session (session_id in request body)
+- `GET /api/upload/status` - Get session status (session_id in request body)
+- `DELETE /api/upload/files/{filename}` - Delete a file from session (session_id in request body)
 
 ### Data Loading
 
 - `POST /api/load` - Load data files into HugeGraph (requires session_id)
 - `POST /api/convert-schema` - Convert JSON schema to Groovy format
-- `POST /api/load` - Load data files with configurable writer type and session ID
-- `POST /api/upload-files` - Upload input files separately with session tracking
-- `POST /api/submit-schema` - Submit schema/configuration for a session
-- `POST /api/convert-schema` - Convert schema definitions
 
 ### Job Management
 
