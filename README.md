@@ -5,6 +5,7 @@ The Custom AtomSpace Builder is a comprehensive graph processing system that tra
 ## Overview
 
 This project provides a flexible graph data loading and transformation pipeline with:
+
 - RESTful API interface for data loading operations
 - Multi-backend support (Neo4j and HugeGraph) with configurable writer system
 - Automatic MeTTa language representation generation for logic-based graph processing
@@ -18,6 +19,7 @@ This project provides a flexible graph data loading and transformation pipeline 
 ## Features
 
 ### Core Functionality
+
 - **Multi-Format Output**: Support for MeTTa-formatted knowledge graphs and Neo4j-compatible formats
 - **Data Loading**: Upload CSV/JSON files with session-based processing and separate schema/configuration submission
 - **Neo4j Integration**: CSV and Cypher file generation pipeline compatible with Neo4j's LOAD CSV functionality
@@ -26,6 +28,7 @@ This project provides a flexible graph data loading and transformation pipeline 
 - **Output Management**: Download job outputs as zip files or individual files
 
 ### Enhanced Capabilities
+
 - **Graph Analytics**: Automatic generation of graph statistics including top entities, connections, and relationship patterns
 - **Multi-Tenancy**: User-specific subgraph isolation using tenant IDs for nodes and edges
 - **Annotation Service Integration**: Schema formatting optimized for graph annotation interfaces
@@ -36,6 +39,7 @@ This project provides a flexible graph data loading and transformation pipeline 
 ## Current Deployment
 
 The service is currently deployed on:
+
 - **Server**: Bizon server
 - **URL**: http://100.67.47.42:8001
 - **API Documentation**: Available at the endpoints listed below
@@ -43,6 +47,7 @@ The service is currently deployed on:
 ## Installation & Setup
 
 ### Prerequisites
+
 - Python 3.8+
 - Docker and Docker Compose
 - Neo4j 4.x+ (for Neo4j backend)
@@ -52,7 +57,7 @@ The service is currently deployed on:
 ### 1. Clone the Repository
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/rejuve-bio/custom-atomspace-builder
 cd custom-atomspace-builder
 ```
 
@@ -73,6 +78,12 @@ NEO4J_PASSWORD=your_password_here
 NEO4J_HOST=localhost
 NEO4J_PORT=7687
 NEO4J_DATABASE=neo4j
+
+# HugeGraph Configuration
+HUGEGRAPH_HOST=localhost
+HUGEGRAPH_PORT=8080
+HUGEGRAPH_GRAPH=hugegraph
+HUGEGRAPH_LOADER_PATH=./hugegraph-loader/apache-hugegraph-loader-incubating-1.5.0/bin/hugegraph-loader.sh
 
 # === HugeGraph settings ===
 HUGEGRAPH_HOST=localhost
@@ -104,6 +115,7 @@ uploads:
 ### 4. Run Database Instances
 
 **For Neo4j:**
+
 ```bash
 docker run -d \
   --name neo4j \
@@ -113,13 +125,16 @@ docker run -d \
 ```
 
 **For HugeGraph:**
+
 ```bash
 docker run -d \
   -p 8080:8080 -p 8182:8182 \
   --name hugegraph \
   hugegraph/hugegraph
 ```
+
 ### 5. Build The Project
+
 ```
 # Build the project (skip tests and checks for faster build)
 mvn clean install -pl hugegraph-client,hugegraph-loader -am \
@@ -129,6 +144,7 @@ mvn clean install -pl hugegraph-client,hugegraph-loader -am \
     -Deditorconfig.skip=true
 
 ```
+
 ## Deployment
 
 ### Local Development
@@ -138,21 +154,204 @@ mvn clean install -pl hugegraph-client,hugegraph-loader -am \
 uvicorn app:app --host 0.0.0.0 --port 8001 --reload
 ```
 
+### Docker Deployment
+
+The project is now fully containerized with Docker. You can run the entire stack using Docker Compose.
+
+#### Prerequisites
+
+Before running Docker, ensure you have:
+
+- Docker and Docker Compose installed
+- Created a `.env` file from `example.env`
+- Updated the `.env` file with your specific credentials
+
+```bash
+# Copy the example environment file
+cp example.env .env
+
+# Edit the .env file with your credentials
+nano .env
+```
+
+#### Production Deployment
+
+```bash
+# Build and start all services
+docker compose up -d
+
+# View logs
+docker compose logs -f
+
+# Stop all services
+docker compose down
+
+# Rebuild and restart (if you make changes)
+docker compose up -d --build
+```
+
+#### Development Deployment
+
+```bash
+# Start with development configuration (hot reload, reduced memory)
+docker compose -f docker-compose.dev.yml up -d
+
+# View development logs
+docker compose -f docker-compose.dev.yml logs -f
+
+# Stop development services
+docker compose -f docker-compose.dev.yml down
+
+# Rebuild development services
+docker compose -f docker-compose.dev.yml up -d --build
+```
+
+#### Individual Services
+
+```bash
+# Start only the API and databases
+docker compose -f docker-compose.dev.yml up -d api neo4j hugegraph
+
+# Start with annotation service
+docker compose -f docker-compose.dev.yml --profile annotation up -d
+
+# Start with development tools
+docker compose -f docker-compose.dev.yml --profile tools up -d
+```
+
+#### Service URLs and Access
+
+Once running, you can access:
+
+- **API**: http://localhost:8000
+
+  - Health check: http://localhost:8000/api/health
+  - API documentation: http://localhost:8000/docs
+
+- **Neo4j Browser**: http://localhost:7474
+
+  - Username: `neo4j`
+  - Password: `atomspace123` (or your custom password from .env)
+
+- **HugeGraph**: http://localhost:8080
+
+  - REST API: http://localhost:8080/graphs/hugegraph/conf
+  - WebSocket: ws://localhost:8182
+
+- **Hubble UI**: http://localhost:8088 (if enabled)
+
+#### Data Persistence
+
+All data is persisted in Docker volumes:
+
+- `neo4j_data_dev`: Neo4j database files (development)
+- `hugegraph_data_dev`: HugeGraph database files (development)
+- `./output`: Application output files (mounted from host)
+
+#### Environment Variables
+
+The system uses environment variables for configuration. Key variables in `.env`:
+
+```bash
+# API Configuration
+API_HOST_PORT=8000
+API_CONTAINER_PORT=8000
+
+# Neo4j Configuration
+NEO4J_HOST=localhost
+NEO4J_PORT=7687
+NEO4J_USERNAME=neo4j
+NEO4J_PASSWORD=atomspace123
+NEO4J_HTTP_PORT=7474
+NEO4J_BOLT_PORT=7687
+
+# HugeGraph Configuration
+HUGEGRAPH_HOST=localhost
+HUGEGRAPH_PORT=8080
+HUGEGRAPH_GRAPH=hugegraph
+HUGEGRAPH_REST_PORT=8080
+HUGEGRAPH_WS_PORT=8182
+
+# Memory Settings (Development)
+NEO4J_HEAP_INITIAL_SIZE_DEV=256m
+NEO4J_HEAP_MAX_SIZE_DEV=1G
+NEO4J_PAGECACHE_SIZE_DEV=256m
+```
+
+#### Troubleshooting
+
+**Common Issues:**
+
+1. **Port conflicts**: If ports are already in use, change them in `.env`
+2. **Permission issues**: Ensure Docker has proper permissions
+3. **Memory issues**: Reduce memory settings in `.env` for development
+4. **Build failures**: Use `--build` flag to rebuild containers
+
+```bash
+# Check service status
+docker compose -f docker-compose.dev.yml ps
+
+# View specific service logs
+docker compose -f docker-compose.dev.yml logs api
+
+# Restart specific service
+docker compose -f docker-compose.dev.yml restart api
+
+# Clean up and start fresh
+docker compose -f docker-compose.dev.yml down -v
+docker compose -f docker-compose.dev.yml up -d --build
+```
+
+#### Development Workflow
+
+1. **Start the development environment**:
+
+   ```bash
+   docker compose -f docker-compose.dev.yml up -d
+   ```
+
+2. **Make code changes** - they will be reflected immediately due to hot reload
+
+3. **View logs in real-time**:
+
+   ```bash
+   docker compose -f docker-compose.dev.yml logs -f api
+   ```
+
+4. **Test API endpoints**:
+
+   ```bash
+   curl http://localhost:8000/api/health
+   ```
+
+5. **Stop when done**:
+   ```bash
+   docker compose -f docker-compose.dev.yml down
+   ```
+
 ## API Endpoints
 
+### Session Management
+
+- `POST /api/upload/create-session` - Create a new upload session
+- `POST /api/upload/files` - Upload files to a session (session_id in request body)
+- `GET /api/upload/status` - Get session status (session_id in request body)
+- `DELETE /api/upload/files/{filename}` - Delete a file from session (session_id in request body)
+
 ### Data Loading
-- `POST /api/load` - Load data files with configurable writer type and session ID
-- `POST /api/upload-files` - Upload input files separately with session tracking
-- `POST /api/submit-schema` - Submit schema/configuration for a session
-- `POST /api/convert-schema` - Convert schema definitions
+
+- `POST /api/load` - Load data files into HugeGraph (requires session_id)
+- `POST /api/convert-schema` - Convert JSON schema to Groovy format
 
 ### Job Management
+
 - `GET /api/history` - Get complete job history with statistics
 - `POST /api/select-job` - Select a specific job for operations
 - `DELETE /api/history/{job_id}` - Remove specific job and delete associated files
 - `DELETE /api/clear-history` - Remove all jobs and reset system
 
 ### Schema & Data Retrieval
+
 - `GET /api/schema/` - Get schema for currently selected job
 - `GET /api/schema/{job_id}` - Get schema information for specific job
 - `GET /api/kg-info/{job_id}` - Get comprehensive graph information
@@ -160,6 +359,7 @@ uvicorn app:app --host 0.0.0.0 --port 8001 --reload
 - `GET /api/output-file/{job_id}/{filename}` - Download specific file
 
 ### System
+
 - `GET /api/health` - Health check endpoint
 - `GET /api/config` - Get current configuration
 
@@ -168,6 +368,16 @@ uvicorn app:app --host 0.0.0.0 --port 8001 --reload
 ### Loading Data with Session ID
 
 ```bash
+# 1. Create an upload session
+curl -X POST "http://localhost:8000/api/upload/create-session"
+
+# 2. Upload files to the session (replace SESSION_ID with the returned session ID)
+curl -X POST "http://localhost:8000/api/upload/SESSION_ID/files" \
+  -F "files=@data.csv"
+
+# 3. Load data using the session
+curl -X POST "http://localhost:8000/api/load" \
+  -F "session_id=SESSION_ID" \
 curl -X POST "http://100.67.47.42:8001/api/load" \
   -F "files=@data.csv" \
   -F "config=$(cat struct.json)" \
@@ -217,6 +427,7 @@ curl -X DELETE "http://100.67.47.42:8001/api/clear-history"
 ## Response Formats
 
 ### Schema Response Structure
+
 ```json
 {
   "job_id": "string",
@@ -246,6 +457,7 @@ curl -X DELETE "http://100.67.47.42:8001/api/clear-history"
 ```
 
 ### Job History Entry Structure
+
 ```json
 {
   "job_id": "string",
@@ -254,12 +466,12 @@ curl -X DELETE "http://100.67.47.42:8001/api/clear-history"
   "dataset_count": "number",
   "data_size": "string",
   "imported_on": "timestamp",
-  "top_entities": [{"name": "string", "count": "number"}],
-  "top_connections": [{"name": "string", "count": "number"}],
-  "frequent_relationships": [{"entities": ["string"], "count": "number"}],
+  "top_entities": [{ "name": "string", "count": "number" }],
+  "top_connections": [{ "name": "string", "count": "number" }],
+  "frequent_relationships": [{ "entities": ["string"], "count": "number" }],
   "schema": {
-    "nodes": [{"data": {"id": "string", "properties": ["string"]}}],
-    "edges": [{"data": {"source": "string", "target": "string", "possible_connections": ["string"]}}]
+    "nodes": [{ "data": { "id": "string", "properties": ["string"] } }],
+    "edges": [{ "data": { "source": "string", "target": "string", "possible_connections": ["string"] } }]
   }
 }
 ```
@@ -267,6 +479,7 @@ curl -X DELETE "http://100.67.47.42:8001/api/clear-history"
 ## Multi-Tenancy
 
 The system implements robust multi-tenancy:
+
 - Each node and edge is tagged with a tenant ID
 - Complete subgraph isolation in shared Neo4j instances
 - User-specific data separation while maintaining performance
@@ -276,6 +489,7 @@ The system implements robust multi-tenancy:
 ## Thread Safety
 
 Enhanced thread safety implementation:
+
 - File locking prevents data loss during concurrent access
 - Atomic operations for multi-file processing
 - Session-based isolation for parallel workflows
@@ -285,6 +499,7 @@ Enhanced thread safety implementation:
 ## Error Handling
 
 Comprehensive error handling includes:
+
 - Thread-safe file operations with automatic retry
 - Graceful handling of job deletion with automatic selection updates
 - Transaction rollback for data integrity
@@ -294,6 +509,7 @@ Comprehensive error handling includes:
 ## Testing
 
 The system has been tested with:
+
 - Large-scale datasets for performance validation
 - Concurrent user scenarios with session isolation
 - Multi-tenant isolation verification

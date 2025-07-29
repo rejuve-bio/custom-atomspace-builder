@@ -1,0 +1,140 @@
+# Docker Compose configuration for Custom Atomspace Builder
+
+services:
+  # Main FastAPI application
+  api:
+    build: .
+    container_name: custom-atomspace-api
+    ports:
+      - "${API_HOST_PORT}:${API_CONTAINER_PORT}"
+    environment:
+      - NEO4J_HOST=neo4j
+      - NEO4J_PORT=${NEO4J_BOLT_PORT}
+      - NEO4J_USERNAME=${NEO4J_USERNAME}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+      - NEO4J_DATABASE=${NEO4J_DATABASE}
+      - HUGEGRAPH_HOST=hugegraph
+      - HUGEGRAPH_PORT=${HUGEGRAPH_REST_PORT}
+      - HUGEGRAPH_GRAPH=${HUGEGRAPH_GRAPH}
+      - ANNOTATION_SERVICE_URL=${ANNOTATION_SERVICE_URL}
+      - ANNOTATION_SERVICE_TIMEOUT=${ANNOTATION_SERVICE_TIMEOUT}
+    depends_on:
+      neo4j:
+        condition: service_healthy
+      hugegraph:
+        condition: service_healthy
+    volumes:
+      - ./output:/app/output
+      - ./hugegraph-loader:/app/hugegraph-loader
+    networks:
+      - atomspace-network
+    restart: unless-stopped
+
+  # Neo4j database
+  neo4j:
+    image: neo4j:5.15-community
+    container_name: neo4j-atomspace
+    restart: unless-stopped
+    ports:
+      - "${NEO4J_HTTP_PORT}:7474"   # HTTP
+      - "${NEO4J_BOLT_PORT}:7687"   # Bolt
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+      - neo4j_import:/var/lib/neo4j/import
+      - neo4j_plugins:/plugins
+    environment:
+      # Authentication
+      - NEO4J_AUTH=${NEO4J_USERNAME}/${NEO4J_PASSWORD}
+      
+      # Memory settings
+      - NEO4J_dbms_memory_heap_initial__size=${NEO4J_HEAP_INITIAL_SIZE}
+      - NEO4J_dbms_memory_heap_max__size=${NEO4J_HEAP_MAX_SIZE}
+      - NEO4J_dbms_memory_pagecache_size=${NEO4J_PAGECACHE_SIZE}
+      
+      # APOC Plugin
+      - NEO4J_PLUGINS=["apoc"]
+      - NEO4J_dbms_security_procedures_unrestricted=apoc.*
+      - NEO4J_dbms_security_procedures_allowlist=apoc.*
+      
+      # CSV import settings
+      - NEO4J_apoc_import_file_enabled=true
+      - NEO4J_apoc_export_file_enabled=true
+      - NEO4J_server_directories_import=import
+      
+      # Performance
+      - NEO4J_server_default__listen__address=0.0.0.0
+    networks:
+      - atomspace-network
+    healthcheck:
+      test: ["CMD", "cypher-shell", "-u", "${NEO4J_USERNAME}", "-p", "${NEO4J_PASSWORD}", "RETURN 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # HugeGraph server
+  hugegraph:
+    image: hugegraph/hugegraph:latest
+    container_name: hugegraph-server
+    restart: unless-stopped
+    ports:
+      - "${HUGEGRAPH_REST_PORT}:8080"   # REST API
+      - "${HUGEGRAPH_WS_PORT}:8182"   # WebSocket
+    volumes:
+      - hugegraph_data:/opt/hugegraph/data
+      - hugegraph_logs:/opt/hugegraph/logs
+    environment:
+      - HUGEGRAPH_GRAPH_NAME=${HUGEGRAPH_GRAPH}
+    networks:
+      - atomspace-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/graphs/${HUGEGRAPH_GRAPH}/conf"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Hubble UI (optional)
+  hubble:
+    build: ./hugegraph-hubble
+    container_name: hugegraph-hubble
+    restart: unless-stopped
+    ports:
+      - "${HUBBLE_PORT}:8088"
+    environment:
+      - HUGEGRAPH_HOST=hugegraph
+      - HUGEGRAPH_PORT=${HUGEGRAPH_REST_PORT}
+    depends_on:
+      hugegraph:
+        condition: service_healthy
+    networks:
+      - atomspace-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8088/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Annotation service (placeholder - replace with actual service)
+  annotation-service:
+    image: busybox:latest
+    container_name: annotation-service
+    command: ["sh", "-c", "echo 'Annotation service placeholder' && sleep infinity"]
+    networks:
+      - atomspace-network
+    profiles:
+      - annotation
+
+volumes:
+  neo4j_data:
+  neo4j_logs:
+  neo4j_import:
+  neo4j_plugins:
+  hugegraph_data:
+  hugegraph_logs:
+
+networks:
+  atomspace-network:
+    driver: bridge 

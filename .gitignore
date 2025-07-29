@@ -99,6 +99,9 @@ tree.txt
 # system ignore
 Thumbs.db
 
+# project index
+PROJECT_INDEX.md
+
 # client-go
 go.env
 
