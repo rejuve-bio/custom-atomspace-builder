@@ -136,6 +136,7 @@ app.add_middleware(
 class WriterType(str, Enum):
     METTA = "metta"
     NEO4J = "neo4j"
+    MORK = "mork"
 
 class PropertyKey(BaseModel):
     name: str
@@ -569,7 +570,10 @@ async def load_data_to_neo4j(output_dir: str, job_id: str) -> dict:
         # Step 1: Copy CSV files to job-specific directory
         csv_copy_result = copy_csv_files_to_neo4j(output_dir, job_id)
         if not csv_copy_result["success"]:
-            return {"status": "error", "message": csv_copy_result["message"]}
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to copy CSV files to job-specific directory: {csv_copy_result['message']}"
+            )
         
         with neo4j_driver.session() as session:
             # Find all cypher files
@@ -605,7 +609,10 @@ async def load_data_to_neo4j(output_dir: str, job_id: str) -> dict:
     except Exception as e:
         # Try to cleanup even if loading failed
         cleanup_neo4j_import_files(job_id)
-        return {"status": "error", "message": str(e)}
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error loading data to Neo4j: {str(e)}"
+        )
 
 def copy_csv_files_to_neo4j(output_dir: str, job_id: str, container_name: str = "neo4j-atomspace") -> dict:
     """Copy CSV files to Neo4j container import/job_id directory"""
