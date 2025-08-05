@@ -14,7 +14,7 @@ import org.apache.hugegraph.loader.builder.Record;
 import org.apache.hugegraph.structure.graph.Edge;
 import org.apache.hugegraph.structure.graph.Vertex;
 
-public class Neo4jCSVWriter {
+public class Neo4jCSVWriter implements Writer {
     
     private static final String CSV_DELIMITER = "|";
     private static final String ARRAY_DELIMITER = ";";
