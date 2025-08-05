@@ -693,15 +693,18 @@ def execute_cypher_file(session, file_path, job_id):
 @app.post("/api/upload/create-session")
 async def create_upload_session_endpoint():
     """Create a new upload session"""
-    session_id = create_upload_session()
-    session_dir = os.path.join(BASE_OUTPUT_DIR, "uploads", session_id)
-    os.makedirs(session_dir, exist_ok=True)
-    
-    return {
-        "session_id": session_id,
-        "expires_at": upload_sessions[session_id].expires_at.isoformat(),
-        "upload_url": f"/api/upload/{session_id}/files"
-    }
+    try:
+        session_id = create_upload_session()
+        session_dir = os.path.join(BASE_OUTPUT_DIR, "uploads", session_id)
+        os.makedirs(session_dir, exist_ok=True)
+        
+        return {
+            "session_id": session_id,
+            "expires_at": upload_sessions[session_id].expires_at.isoformat(),
+            "upload_url": f"/api/upload/files"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create session directory: {str(e)}")
 
 @app.post("/api/upload/files")
 async def upload_files(
