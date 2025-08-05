@@ -902,14 +902,14 @@ async def load_data(
                     with open(neo4j_result_path, "w") as f:
                         json.dump(neo4j_load_result, f, indent=2)
             
-            error_msg = await notify_annotation_service(job_id, writer_type)
-            if error_msg:
-                selected_job_id = get_selected_job_id()
-                if selected_job_id:
-                    await notify_annotation_service(selected_job_id, writer_type)
-                if os.path.exists(output_dir):
-                    shutil.rmtree(output_dir, ignore_errors=True)
-                raise HTTPException(status_code=500, detail={"message": error_msg, "job_id": job_id})
+            # error_msg = await notify_annotation_service(job_id, writer_type)
+            # if error_msg:
+            #     selected_job_id = get_selected_job_id()
+            #     if selected_job_id:
+            #         await notify_annotation_service(selected_job_id, writer_type)
+            #     if os.path.exists(output_dir):
+            #         shutil.rmtree(output_dir, ignore_errors=True)
+            #     raise HTTPException(status_code=500, detail={"message": error_msg, "job_id": job_id})
             
             graph_info = await generate_graph_info(job_id, writer_type)
             save_graph_info(job_id, graph_info)
