@@ -136,6 +136,7 @@ app.add_middleware(
 class WriterType(str, Enum):
     METTA = "metta"
     NEO4J = "neo4j"
+    MORK = "mork"
 
 class PropertyKey(BaseModel):
     name: str
@@ -485,6 +486,8 @@ def generate_annotation_schema(schema_data: dict, job_id: str) -> dict:
     return annotation_schema
 
 async def notify_annotation_service(job_id: str, writer_type: str) -> Optional[str]:
+    if writer_type == "neo4j":
+        writer_type = "cypher"
     payload = {"folder_id": job_id, "type": writer_type}
     try:
         async with httpx.AsyncClient() as client:
@@ -569,7 +572,10 @@ async def load_data_to_neo4j(output_dir: str, job_id: str) -> dict:
         # Step 1: Copy CSV files to job-specific directory
         csv_copy_result = copy_csv_files_to_neo4j(output_dir, job_id)
         if not csv_copy_result["success"]:
-            return {"status": "error", "message": csv_copy_result["message"]}
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to copy CSV files to job-specific directory: {csv_copy_result['message']}"
+            )
         
         with neo4j_driver.session() as session:
             # Find all cypher files
@@ -605,7 +611,10 @@ async def load_data_to_neo4j(output_dir: str, job_id: str) -> dict:
     except Exception as e:
         # Try to cleanup even if loading failed
         cleanup_neo4j_import_files(job_id)
-        return {"status": "error", "message": str(e)}
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error loading data to Neo4j: {str(e)}"
+        )
 
 def copy_csv_files_to_neo4j(output_dir: str, job_id: str, container_name: str = "neo4j-atomspace") -> dict:
     """Copy CSV files to Neo4j container import/job_id directory"""
@@ -684,15 +693,18 @@ def execute_cypher_file(session, file_path, job_id):
 @app.post("/api/upload/create-session")
 async def create_upload_session_endpoint():
     """Create a new upload session"""
-    session_id = create_upload_session()
-    session_dir = os.path.join(BASE_OUTPUT_DIR, "uploads", session_id)
-    os.makedirs(session_dir, exist_ok=True)
-    
-    return {
-        "session_id": session_id,
-        "expires_at": upload_sessions[session_id].expires_at.isoformat(),
-        "upload_url": f"/api/upload/{session_id}/files"
-    }
+    try:
+        session_id = create_upload_session()
+        session_dir = os.path.join(BASE_OUTPUT_DIR, "uploads", session_id)
+        os.makedirs(session_dir, exist_ok=True)
+        
+        return {
+            "session_id": session_id,
+            "expires_at": upload_sessions[session_id].expires_at.isoformat(),
+            "upload_url": f"/api/upload/files"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create session directory: {str(e)}")
 
 @app.post("/api/upload/files")
 async def upload_files(

@@ -1,13 +1,10 @@
 package org.apache.hugegraph.loader.writer;
 
-import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
@@ -18,16 +15,18 @@ import org.apache.hugegraph.loader.builder.Record;
 import org.apache.hugegraph.structure.graph.Edge;
 import org.apache.hugegraph.structure.graph.Vertex;
 
-public class MeTTaWriter {
+public class MeTTaWriter implements Writer {
     
-    private final String OUTPUT_DIR;
+    private final String outputDir;
+    private final String writerType;
     private static final ConcurrentHashMap<String, Object> FILE_LOCKS = new ConcurrentHashMap<>();
     
-    public MeTTaWriter(String outputDir) {
-        this.OUTPUT_DIR = outputDir;
-        // Create output directory if it doesn't exist
+    public MeTTaWriter(String outputDir, String writerType) {
+        this.outputDir = outputDir;
+        this.writerType = writerType;
+        
         try {
-            Files.createDirectories(Paths.get(OUTPUT_DIR));
+            Files.createDirectories(Paths.get(outputDir));
         } catch (IOException e) {
             throw new RuntimeException("Failed to create output directory", e);
         }
@@ -43,7 +42,7 @@ public class MeTTaWriter {
             String label = entry.getKey();
             List<Vertex> vertices = entry.getValue();
             
-            String filePath = OUTPUT_DIR + "/" + label + ".metta";
+            String filePath = outputDir + "/" + label + ".metta";
             writeToFileWithLock(filePath, vertices, true);
         }
     }
@@ -99,7 +98,7 @@ public class MeTTaWriter {
             String label = entry.getKey();
             List<Edge> edges = entry.getValue();
             
-            String filePath = OUTPUT_DIR + "/" + label + ".metta";
+            String filePath = outputDir + "/" + label + ".metta";
             writeToFileWithLock(filePath, edges, false);
         }
     }
@@ -196,6 +195,11 @@ public class MeTTaWriter {
             return "null";
         }
         
+        // if writer type is "mork" truncate the property to 1000 characters
+        if (this.writerType.equals("mork") && prop.length() > 1000) {
+            prop = prop.substring(0, 1000);
+        }
+
         if (prop.contains(" ")) {
             prop = prop.replace(" ", "_");
         }
