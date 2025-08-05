@@ -32,6 +32,7 @@ import org.apache.hugegraph.loader.metrics.LoadMetrics;
 import org.apache.hugegraph.loader.metrics.LoadSummary;
 import org.apache.hugegraph.loader.writer.MeTTaWriter;
 import org.apache.hugegraph.loader.writer.Neo4jCSVWriter;
+import org.apache.hugegraph.loader.writer.Writer;
 import org.apache.hugegraph.structure.GraphElement;
 import org.apache.hugegraph.structure.graph.BatchEdgeRequest;
 import org.apache.hugegraph.structure.graph.BatchVertexRequest;
@@ -58,11 +59,10 @@ public abstract class InsertTask implements Runnable {
     protected final InputStruct struct;
     protected final ElementMapping mapping;
     protected final List<Record> batch;
-    protected final MeTTaWriter mettaWriter;
-    protected final Neo4jCSVWriter neo4jWriter;
     protected final String writerType;
     protected final String jobId;
     protected final String outputDir;
+    protected Writer writer;
 
     public InsertTask(LoadContext context, InputStruct struct,
                       ElementMapping mapping, List<Record> batch) {
@@ -73,9 +73,20 @@ public abstract class InsertTask implements Runnable {
         this.batch = batch;
         this.outputDir = this.context.options().output;
         this.jobId = this.context.options().jobId;
-        this.mettaWriter = new MeTTaWriter(this.outputDir);
-        this.neo4jWriter = new Neo4jCSVWriter(this.outputDir, this.jobId);
         this.writerType = this.context.options().writerType;
+
+        if (!this.writerType.equals("metta") &&
+            !this.writerType.equals("neo4j") &&
+            !this.writerType.equals("mork")) {
+            throw new IllegalArgumentException(
+                "Unsupported writer type: " + this.writerType);
+        }
+
+        if (this.writerType.equals("metta") || this.writerType.equals("mork")) {
+            this.writer = new MeTTaWriter(this.outputDir, this.writerType);
+        } else if (this.writerType.equals("neo4j")) {
+            this.writer = new Neo4jCSVWriter(this.outputDir, this.jobId);
+        }
     }
 
     public ElemType type() {
@@ -124,20 +135,11 @@ public abstract class InsertTask implements Runnable {
         batch.forEach(r -> elements.add(r.element()));
         if (this.type().isVertex()) {
             // client.graph().addVertices((List<Vertex>) (Object) elements);
-            if (this.writerType.equals("metta")) {
-                this.mettaWriter.writeNodes(batch);
-            } else if (this.writerType.equals("neo4j")) {
-                this.neo4jWriter.writeNodes(batch);
-            }
+            this.writer.writeNodes(batch);
         } else {
             // client.graph().addEdges((List<Edge>) (Object) elements,
                                     // checkVertex);
-            if (this.writerType.equals("metta")) {
-                this.mettaWriter.writeEdges(batch);
-            } else if (this.writerType.equals("neo4j")) {
-                this.neo4jWriter.writeEdges(batch);
-            }
-            
+            this.writer.writeEdges(batch);
         }
     }
 
