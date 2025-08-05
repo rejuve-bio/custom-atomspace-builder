@@ -486,6 +486,8 @@ def generate_annotation_schema(schema_data: dict, job_id: str) -> dict:
     return annotation_schema
 
 async def notify_annotation_service(job_id: str, writer_type: str) -> Optional[str]:
+    if writer_type == "neo4j":
+        writer_type = "cypher"
     payload = {"folder_id": job_id, "type": writer_type}
     try:
         async with httpx.AsyncClient() as client:
