@@ -168,5 +168,5 @@ docs/
 !README.md
 
 # Configuration files that might contain secrets
-config.yaml
-example.env 
+# config.yaml
+# example.env 

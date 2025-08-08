@@ -26,20 +26,6 @@ FROM python:3.11-slim
 
 ENV PYTHONUNBUFFERED=1
 
-<<<<<<< HEAD
-# Install system dependencies including Java
-RUN apt-get update && apt-get install -y \
-    curl \
-    openjdk-11-jdk \
-    && rm -rf /var/lib/apt/lists/*
-
-# Set JAVA_HOME environment variable
-ENV JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
-ENV PATH=$JAVA_HOME/bin:$PATH
-
-# Copy requirements first for better caching
-COPY requirements.txt .
-=======
 ARG API_PORT
 
 # Install system dependencies (including Java for HugeGraph Loader)
@@ -51,7 +37,6 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
->>>>>>> ad411145 (Refactor Docker and Docker Compose configurations for improved structure and environment variable management)
 
 # Copy and install Python dependencies
 COPY requirements.txt .
@@ -63,7 +48,7 @@ COPY --from=hugegraph-builder /build/hugegraph-loader/apache-hugegraph-loader-in
 # Copy application code
 COPY app/ ./app/
 COPY config.yaml .
-COPY .env.template .env
+COPY example.env .env
 
 # Create directories and set permissions
 RUN mkdir -p output uploads logs && \
