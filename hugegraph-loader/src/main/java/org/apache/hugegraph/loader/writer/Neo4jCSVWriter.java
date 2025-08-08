@@ -205,7 +205,7 @@ public class Neo4jCSVWriter implements Writer {
     }
     
     private void writeNodeCypher(String label, String csvPath, String cypherPath) throws IOException {
-        String csvFileName = this.JOB_ID + "/" + new File(csvPath).getName();
+        String csvFileName = "shared/output/"+this.JOB_ID + "/" + new File(csvPath).getName();
         
         String cypherQuery = String.format(
             "CALL apoc.periodic.iterate(\n" +
@@ -231,7 +231,7 @@ public class Neo4jCSVWriter implements Writer {
     }
     
     private void writeEdgeCypher(String edgeKey, String csvPath, String cypherPath) throws IOException {
-        String csvFileName = this.JOB_ID + "/" + new File(csvPath).getName();
+        String csvFileName = "shared/output/"+this.JOB_ID + "/" + new File(csvPath).getName();
         
         // Get edge info from stored metadata
         EdgeInfo edgeInfo = edgeInfoMap.get(edgeKey);

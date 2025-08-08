@@ -54,6 +54,8 @@ public class MeTTaWriter implements Writer {
         String id = vertex.id() == null ? "null" : vertex.id().toString();
         String label = vertex.label();
         Map<String, Object> properties = vertex.properties();
+        // remove "id" property if it exists
+        properties.remove("id");
         
         StringBuilder result = new StringBuilder();
         result.append("(").append(label).append(" ").append(id).append(")");
@@ -113,6 +115,8 @@ public class MeTTaWriter implements Writer {
         String targetLabel = edge.targetLabel();
         String label = edge.label();
         Map<String, Object> properties = edge.properties();
+        // remove "id" property if it exists
+        properties.remove("id");
         
         StringBuilder result = new StringBuilder();
         result.append("(").append(label).append(" (").append(sourceLabel).append(" ").append(sourceId).append(") ")
