@@ -62,6 +62,11 @@ async def load_data(
         neo4j_load_result = None
         if writer_type == WriterType.NEO4J:
             neo4j_load_result = await neo4j_service.load_data_to_neo4j(output_dir, job_id)
+            if neo4j_load_result.status == "error":
+                raise HTTPException(
+                    status_code=500, 
+                    detail=f"Failed to load data to Neo4j: {neo4j_load_result.message}"
+                )
             
             # Save load results
             if neo4j_load_result:

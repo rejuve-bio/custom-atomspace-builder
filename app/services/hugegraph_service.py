@@ -31,11 +31,11 @@ class HugeGraphService:
         
         try:
             with tempfile.TemporaryDirectory() as tmpdir:
-                # Copy files and prepare paths
-                file_mapping = copy_files_to_temp_dir(files_dir, tmpdir)
-
                 # Remove "id" property from schema if present
                 schema_data = self._remove_id_property(schema_data)
+
+                # Copy files and prepare paths
+                file_mapping = copy_files_to_temp_dir(files_dir, tmpdir)
                 
                 # Generate schema and config files
                 schema_path = self._create_schema_file(schema_data, job_id, tmpdir)
@@ -79,7 +79,7 @@ class HugeGraphService:
     
     def _remove_id_property(self, schema_data: Dict[str, Any]) -> Dict[str, Any]:
         """Remove 'id' property from schema data if it exists."""
-        for vertex in schema_data.get("vertice_labels", []):
+        for vertex in schema_data.get("vertex_labels", []):
             if "id" in vertex.get("properties", []):
                 vertex["properties"].remove("id")
         
