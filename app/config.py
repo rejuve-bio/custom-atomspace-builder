@@ -29,6 +29,7 @@ class Settings:
     
     def _load_env_settings(self):
         """Load settings from environment variables."""
+        self.api_port = int(os.getenv('API_PORT', 8000))
         # HugeGraph settings
         self.hugegraph_loader_path = self._config['paths']['hugegraph_loader']
         self.hugegraph_host = os.getenv('HUGEGRAPH_HOST', 'localhost')
