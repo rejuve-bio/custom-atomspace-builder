@@ -102,13 +102,7 @@ git clone https://github.com/rejuve-bio/custom-atomspace-builder
 cd custom-atomspace-builder
 ```
 
-### 2. Install Python Dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-### 3. Configuration
+### 2. Configuration
 
 Create a `.env` file from the example template:
 
@@ -167,7 +161,7 @@ Update the `config.yaml` file for additional configuration:
 
 ```yaml
 paths:
-  hugegraph_loader: "./hugegraph-loader/apache-hugegraph-loader-incubating-1.5.0/bin/hugegraph-loader.sh"
+  hugegraph_loader: "/app/hugegraph-loader/apache-hugegraph-loader-incubating-1.5.0/bin/hugegraph-loader.sh"
   output_dir: "./output"
 
 cors:
@@ -180,7 +174,7 @@ uploads:
   session_timeout: 24 # hours
 ```
 
-## Development Workflow with Makefile
+### 3. Development Workflow with Makefile
 
 The project includes a comprehensive Makefile for streamlined development and deployment operations:
 
@@ -239,10 +233,14 @@ make down-dev
 
 ```bash
 # Using Makefile (recommended)
-make up-dev
+make build-dev
+```
 
-# Or traditional method
-uvicorn app:app --host 0.0.0.0 --port 8001 --reload
+### Production Development
+
+```bash
+# Using Makefile (recommended)
+make build
 ```
 
 ### Docker Deployment
@@ -251,20 +249,10 @@ uvicorn app:app --host 0.0.0.0 --port 8001 --reload
 
 ```bash
 # Quick start with Makefile
-make up-dev
+make build-dev
 
 # Traditional method
 docker compose -f docker-compose.dev.yml up -d
-```
-
-#### Production Deployment
-
-```bash
-# Quick start with Makefile
-make up
-
-# Traditional method
-docker compose up -d
 ```
 
 ### Service URLs and Access
