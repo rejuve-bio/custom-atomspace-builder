@@ -1,131 +1,84 @@
-# Docker Compose configuration for Custom Atomspace Builder
-
 services:
-  # Main FastAPI application
-  api:
-    build: .
-    container_name: custom-atomspace-api
+  atomspace-api:
+    build: 
+      context: .
+      dockerfile: ${DOCKERFILE:-Dockerfile}
+    container_name: atomspace-api
     ports:
-      - "${API_HOST_PORT}:${API_CONTAINER_PORT}"
+      - "${API_PORT:-8000}:8000"
     environment:
       - NEO4J_HOST=neo4j
-      - NEO4J_PORT=${NEO4J_BOLT_PORT}
-      - NEO4J_USERNAME=${NEO4J_USERNAME}
-      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
-      - NEO4J_DATABASE=${NEO4J_DATABASE}
+      - NEO4J_PORT=${NEO4J_PORT:-7687}
+      - NEO4J_USERNAME=${NEO4J_USERNAME:-neo4j}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD:-atomspace123}
+      - NEO4J_DATABASE=${NEO4J_DATABASE:-neo4j}
       - HUGEGRAPH_HOST=hugegraph
-      - HUGEGRAPH_PORT=${HUGEGRAPH_REST_PORT}
-      - HUGEGRAPH_GRAPH=${HUGEGRAPH_GRAPH}
-      - ANNOTATION_SERVICE_URL=${ANNOTATION_SERVICE_URL}
-      - ANNOTATION_SERVICE_TIMEOUT=${ANNOTATION_SERVICE_TIMEOUT}
+      - HUGEGRAPH_PORT=${HUGEGRAPH_PORT:-8080}
+      - HUGEGRAPH_GRAPH=${HUGEGRAPH_GRAPH:-hugegraph}
+      - ANNOTATION_SERVICE_URL=${ANNOTATION_SERVICE_URL:-}
+      - ANNOTATION_SERVICE_TIMEOUT=${ANNOTATION_SERVICE_TIMEOUT:-300.0}
+    volumes:
+      - ./output:/app/output
+      - ./config.yaml:/app/config.yaml
+      - atomspace_logs:/app/logs
+      - shared_output:/shared/output
     depends_on:
       neo4j:
         condition: service_healthy
       hugegraph:
-        condition: service_healthy
-    volumes:
-      - ./output:/app/output
-      - ./hugegraph-loader:/app/hugegraph-loader
+        condition: service_started
     networks:
       - atomspace-network
-    restart: unless-stopped
+    restart: always
 
-  # Neo4j database
   neo4j:
     image: neo4j:5.15-community
     container_name: neo4j-atomspace
-    restart: unless-stopped
     ports:
-      - "${NEO4J_HTTP_PORT}:7474"   # HTTP
-      - "${NEO4J_BOLT_PORT}:7687"   # Bolt
-    volumes:
-      - neo4j_data:/data
-      - neo4j_logs:/logs
-      - neo4j_import:/var/lib/neo4j/import
-      - neo4j_plugins:/plugins
+      - "${NEO4J_HTTP_PORT:-7474}:7474"
+      - "${NEO4J_BOLT_PORT:-7687}:7687"
     environment:
-      # Authentication
-      - NEO4J_AUTH=${NEO4J_USERNAME}/${NEO4J_PASSWORD}
-      
-      # Memory settings
-      - NEO4J_dbms_memory_heap_initial__size=${NEO4J_HEAP_INITIAL_SIZE}
-      - NEO4J_dbms_memory_heap_max__size=${NEO4J_HEAP_MAX_SIZE}
-      - NEO4J_dbms_memory_pagecache_size=${NEO4J_PAGECACHE_SIZE}
-      
-      # APOC Plugin
+      - NEO4J_AUTH=${NEO4J_USERNAME:-neo4j}/${NEO4J_PASSWORD:-atomspace123}
       - NEO4J_PLUGINS=["apoc"]
       - NEO4J_dbms_security_procedures_unrestricted=apoc.*
       - NEO4J_dbms_security_procedures_allowlist=apoc.*
-      
-      # CSV import settings
       - NEO4J_apoc_import_file_enabled=true
       - NEO4J_apoc_export_file_enabled=true
-      - NEO4J_server_directories_import=import
-      
-      # Performance
-      - NEO4J_server_default__listen__address=0.0.0.0
+      - NEO4J_dbms_security_allow__csv__import__from__file__urls=true
+      - NEO4J_dbms_directories_import=/var/lib/neo4j/import
+      - NEO4J_dbms_memory_heap_initial__size=${NEO4J_HEAP_INITIAL:-512m}
+      - NEO4J_dbms_memory_heap_max__size=${NEO4J_HEAP_MAX:-2G}
+      - NEO4J_dbms_memory_pagecache_size=${NEO4J_PAGECACHE:-1G}
+      - NEO4J_server_config_strict__validation_enabled=false
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+      - shared_output:/var/lib/neo4j/import/shared/output
+      - neo4j_plugins:/plugins
     networks:
       - atomspace-network
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "cypher-shell", "-u", "${NEO4J_USERNAME}", "-p", "${NEO4J_PASSWORD}", "RETURN 1"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 30s
 
-  # HugeGraph server
+
   hugegraph:
-    image: hugegraph/hugegraph:latest
-    container_name: hugegraph-server
-    restart: unless-stopped
+    image: hugegraph/hugegraph:1.5.0
+    container_name: hugegraph-atomspace
     ports:
-      - "${HUGEGRAPH_REST_PORT}:8080"   # REST API
-      - "${HUGEGRAPH_WS_PORT}:8182"   # WebSocket
+      - "${HUGEGRAPH_REST_PORT:-8080}:8080"
+      - "${HUGEGRAPH_GREMLIN_PORT:-8182}:8182"
+    environment:
+      - HUGEGRAPH_CONF=/hugegraph/conf
     volumes:
-      - hugegraph_data:/opt/hugegraph/data
-      - hugegraph_logs:/opt/hugegraph/logs
-    environment:
-      - HUGEGRAPH_GRAPH_NAME=${HUGEGRAPH_GRAPH}
+      - hugegraph_data:/hugegraph/data
+      - hugegraph_logs:/hugegraph/logs
     networks:
       - atomspace-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/graphs/${HUGEGRAPH_GRAPH}/conf"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-
-  # Hubble UI (optional)
-  hubble:
-    build: ./hugegraph-hubble
-    container_name: hugegraph-hubble
     restart: unless-stopped
-    ports:
-      - "${HUBBLE_PORT}:8088"
-    environment:
-      - HUGEGRAPH_HOST=hugegraph
-      - HUGEGRAPH_PORT=${HUGEGRAPH_REST_PORT}
-    depends_on:
-      hugegraph:
-        condition: service_healthy
-    networks:
-      - atomspace-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8088/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-
-  # Annotation service (placeholder - replace with actual service)
-  annotation-service:
-    image: busybox:latest
-    container_name: annotation-service
-    command: ["sh", "-c", "echo 'Annotation service placeholder' && sleep infinity"]
-    networks:
-      - atomspace-network
-    profiles:
-      - annotation
 
 volumes:
   neo4j_data:
@@ -134,7 +87,9 @@ volumes:
   neo4j_plugins:
   hugegraph_data:
   hugegraph_logs:
+  atomspace_logs:
+  shared_output:
 
 networks:
   atomspace-network:
-    driver: bridge 
+    driver: bridge
