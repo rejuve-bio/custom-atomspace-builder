@@ -16,7 +16,9 @@ class AnnotationService:
         """Notify the annotation service about a new job."""
         if not self.service_url:
             print("Warning: Annotation service URL not configured")
-            return None
+            raise RuntimeError("Annotation service URL is not set")
+        if writer_type == "neo4j":
+            writer_type = "cypher"
         
         payload = {"folder_id": job_id, "type": writer_type}
         
