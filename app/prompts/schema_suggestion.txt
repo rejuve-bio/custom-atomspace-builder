@@ -1,0 +1,80 @@
+Given an array of objects each describing a CSV file, I want to create a representation of a knowledge graph that can be constructed from them. Each CSV will correspond to one node and edges will be created between them. Each data source in the array will implement this TypeScript interface:
+
+export interface DataSource {
+  id: string;
+  file: File;
+  columns: string[];
+  sampleRow: string[];
+}
+
+Each node in the knowledge graph schema will implement this interface:
+
+interface Node {
+  id: string;
+  type: "entity";
+  position: {x: 0, y: 0};
+  data: {
+    name?: string;
+    table?: string;
+    primaryKey?: string;
+    properties: {
+      [key: string]: {
+        name?: string;
+        col: string;
+        type: 'int' | 'text' | 'double';
+        checked: true;
+      };
+    };
+  };
+}
+
+The "table" field is the "id" field of the data source for the node. Each property can be renamed by setting the "name" optional field to avoid collision with other property names.
+
+Each edge in the knowledge graph schema will implement this interface:
+
+interface Relation {
+  id: string;
+  type: "relation";
+  source: string;
+  target: string;
+  name: string;
+  data: {
+    [key: string]: {
+      name?: string;
+      reversed?: boolean;
+      table?: string;
+      source?: string;
+      target?: string;
+      primaryKey?: string;
+      error?: { [key: string]: string };
+      properties: {
+        [key: string]: {
+          name?: string;
+          col: string;
+          type: string;
+          checked?: boolean;
+        };
+      };
+    };
+  };
+}
+
+The "source" and "target" fields refer to the source and target node IDs the edge is connecting. The "data" field of the edge might have multiple random keys, each for different possible connections between the nodes. For example, a "person" node might have a "works_at", "owns" relationships with a "company" node. In this case, the "data" field of the edge will have two keys and configuration objects for these relationships.
+
+The output schema will have the structure:
+interface Schema {
+  nodes: Node[];
+  edges: Edge[];
+}
+
+Guidelines for schema generation:
+1. Identify node files (usually contain "nodes_" in filename or are standalone entity files)
+2. Identify edge files (usually contain "edges_" in filename or have source/target columns)
+3. For nodes, extract entity type from filename or infer from content
+4. For edges, parse relationship names from filename or column values
+5. Infer column types: "int" for IDs/counts, "double" for prices/rates, "text" for names/descriptions
+6. Set primary keys (usually "id" column)
+7. Create meaningful node positions for visualization
+8. Map edge source/target columns to connect appropriate nodes
+
+Generate schema for these data sources (return only valid JSON, no explanation):
