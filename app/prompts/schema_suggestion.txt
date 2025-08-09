@@ -76,5 +76,5 @@ Guidelines for schema generation:
 6. Set primary keys (usually "id" column)
 7. Create meaningful node positions for visualization
 8. Map edge source/target columns to connect appropriate nodes
-
+9. Return only valid JSON. Do not include markdown formatting, triple backticks, or explanations. The response must start with { and end with }.
 Generate schema for these data sources (return only valid JSON, no explanation):

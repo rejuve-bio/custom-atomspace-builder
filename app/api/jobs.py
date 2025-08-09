@@ -3,7 +3,6 @@
 import json
 import os
 import shutil
-from app.services import schema_suggestion_service
 from fastapi import APIRouter, Form, HTTPException, File, UploadFile
 from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
 from typing import List
@@ -12,6 +11,7 @@ from ..services.hugegraph_service import hugegraph_service
 from ..services.neo4j_service import neo4j_service
 from ..services.annotation_service import annotation_service
 from ..services.graph_info_service import graph_info_service
+from ..services.schema_suggestion_service import schema_suggestion_service
 from ..models.schemas import (
     HugeGraphLoadResponse, 
     JobSelectionRequest,

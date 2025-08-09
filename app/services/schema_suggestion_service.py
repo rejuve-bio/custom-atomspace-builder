@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 from typing import List
 import httpx
 from ..models.schemas import DataSource, SuggestedSchema
@@ -41,7 +42,7 @@ class SchemaSuggestionService:
         except Exception as e:
             print(f"Error parsing LLM response: {e}")
             # Return a basic fallback schema
-            return self._create_fallback_schema(data_sources)
+            raise Exception("Failed to parse schema suggestion from LLM response") from e
     
     def _create_prompt(self, data_sources: List[DataSource]) -> str:
         """Create the LLM prompt with data sources."""
@@ -206,25 +207,33 @@ class SchemaSuggestionService:
                 pass
         
         return "text"
+
+    def _clean_json_response(self, text: str):
+        # Remove triple backticks and optional 'json'
+        cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", text.strip(), flags=re.MULTILINE)
+        return cleaned
     
     async def _call_openai(self, prompt: str) -> str:
         """Call OpenAI API."""
-        # Implement OpenAI API call
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                "https://api.openai.com/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {self.api_key}",
-                    "Content-Type": "application/json"
-                },
-                json={
-                    "model": "gpt-4",
-                    "messages": [{"role": "user", "content": prompt}],
-                    "temperature": 0.1
-                }
-            )
-            result = response.json()
-            return result["choices"][0]["message"]["content"]
+        try:
+            # Implement OpenAI API call
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    "https://api.openai.com/v1/responses",
+                    headers={
+                        "Authorization": f"Bearer {self.api_key}",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "model": "gpt-4.1",
+                        "input": prompt,
+                        "temperature": 0.1
+                    }
+                )
+                result = response.json()
+                return self._clean_json_response(result["output"][0]["content"][0]["text"])
+        except Exception as e:
+            raise Exception(f"OpenAI API call failed: {e}")
     
     async def _call_anthropic(self, prompt: str) -> str:
         """Call Anthropic API."""
