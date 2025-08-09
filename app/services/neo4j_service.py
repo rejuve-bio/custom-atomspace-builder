@@ -129,7 +129,7 @@ class Neo4jService:
         except Exception as e:
             raise HTTPException(
                 status_code=500,
-                detail=f"Failed to copy CSV files to job-specific directory: {csv_copy_result['message']}"
+                detail=f"Failed to copy CSV files to job-specific directory: {e}"
             )
     
     def _cleanup_shared_files(self, job_id: str) -> bool:

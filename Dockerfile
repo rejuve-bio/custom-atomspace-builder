@@ -48,7 +48,7 @@ COPY --from=hugegraph-builder /build/hugegraph-loader/apache-hugegraph-loader-in
 # Copy application code
 COPY app/ ./app/
 COPY config.yaml .
-COPY example.env .env
+COPY .env .env
 
 # Create directories and set permissions
 RUN mkdir -p output uploads logs && \
