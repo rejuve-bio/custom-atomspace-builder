@@ -65,26 +65,54 @@ public class MeTTaWriter implements Writer {
             String key = prop.getKey();
             Object value = prop.getValue();
             
-            if (value != null && !value.toString().isEmpty()) {
-                result.append("\n(").append(key).append(" (").append(label).append(" ").append(id).append(") ");
-                
+            result.append("\n(").append(key).append(" (").append(label).append(" ").append(id).append(") ");
+            
+            // Handle null or empty values
+            if (value == null || value.toString().isEmpty()) {
+                result.append("N/A");
+            } else {
                 // Handle different property types
                 if (value instanceof List) {
                     result.append("(");
                     List<?> list = (List<?>) value;
-                    for (int i = 0; i < list.size(); i++) {
-                        result.append(checkProperty(list.get(i).toString()));
-                        if (i < list.size() - 1) {
-                            result.append(" ");
+                    
+                    if (this.writerType.equals("mork")) {
+                        // For mork writer, ensure the entire concatenated list doesn't exceed 1000 chars
+                        StringBuilder listContent = new StringBuilder();
+                        for (int i = 0; i < list.size(); i++) {
+                            String processedItem = checkProperty(list.get(i).toString());
+                            String separator = (i < list.size() - 1) ? " " : "";
+                            String itemWithSeparator = processedItem + separator;
+                            
+                            // Check if adding this item would exceed the limit
+                            if (listContent.length() + itemWithSeparator.length() > 1000) {
+                                // If this is the first item and it's still too long, truncate it
+                                if (listContent.length() == 0) {
+                                    listContent.append(processedItem.substring(0, 1000));
+                                }
+                                break; // Stop adding more items
+                            }
+                            
+                            listContent.append(itemWithSeparator);
+                        }
+                        result.append(listContent);
+                    } else {
+                        // Original logic for non-mork writers
+                        for (int i = 0; i < list.size(); i++) {
+                            result.append(checkProperty(list.get(i).toString()));
+                            if (i < list.size() - 1) {
+                                result.append(" ");
+                            }
                         }
                     }
+                    
                     result.append(")");
                 } else {
                     result.append(checkProperty(value.toString()));
                 }
-                
-                result.append(")");
             }
+            
+            result.append(")");
         }
         
         return result.toString();
@@ -120,35 +148,63 @@ public class MeTTaWriter implements Writer {
         
         StringBuilder result = new StringBuilder();
         result.append("(").append(label).append(" (").append(sourceLabel).append(" ").append(sourceId).append(") ")
-              .append("(").append(targetLabel).append(" ").append(targetId).append("))");
+            .append("(").append(targetLabel).append(" ").append(targetId).append("))");
         
         // Add properties
         for (Map.Entry<String, Object> prop : properties.entrySet()) {
             String key = prop.getKey();
             Object value = prop.getValue();
             
-            if (value != null && !value.toString().isEmpty()) {
-                result.append("\n(").append(key).append(" (").append(label)
-                      .append(" (").append(sourceLabel).append(" ").append(sourceId).append(") ")
-                      .append("(").append(targetLabel).append(" ").append(targetId).append(")) ");
-                
+            result.append("\n(").append(key).append(" (").append(label)
+                .append(" (").append(sourceLabel).append(" ").append(sourceId).append(") ")
+                .append("(").append(targetLabel).append(" ").append(targetId).append(")) ");
+            
+            // Handle null or empty values
+            if (value == null || value.toString().isEmpty()) {
+                result.append("N/A");
+            } else {
                 // Handle different property types
                 if (value instanceof List) {
                     result.append("(");
                     List<?> list = (List<?>) value;
-                    for (int i = 0; i < list.size(); i++) {
-                        result.append(checkProperty(list.get(i).toString()));
-                        if (i < list.size() - 1) {
-                            result.append(" ");
+                    
+                    if (this.writerType.equals("mork")) {
+                        // For mork writer, ensure the entire concatenated list doesn't exceed 1000 chars
+                        StringBuilder listContent = new StringBuilder();
+                        for (int i = 0; i < list.size(); i++) {
+                            String processedItem = checkProperty(list.get(i).toString());
+                            String separator = (i < list.size() - 1) ? " " : "";
+                            String itemWithSeparator = processedItem + separator;
+                            
+                            // Check if adding this item would exceed the limit
+                            if (listContent.length() + itemWithSeparator.length() > 1000) {
+                                // If this is the first item and it's still too long, truncate it
+                                if (listContent.length() == 0) {
+                                    listContent.append(processedItem.substring(0, 1000));
+                                }
+                                break; // Stop adding more items
+                            }
+                            
+                            listContent.append(itemWithSeparator);
+                        }
+                        result.append(listContent);
+                    } else {
+                        // Original logic for non-mork writers
+                        for (int i = 0; i < list.size(); i++) {
+                            result.append(checkProperty(list.get(i).toString()));
+                            if (i < list.size() - 1) {
+                                result.append(" ");
+                            }
                         }
                     }
+                    
                     result.append(")");
                 } else {
                     result.append(checkProperty(value.toString()));
                 }
-                
-                result.append(")");
             }
+            
+            result.append(")");
         }
         
         return result.toString();

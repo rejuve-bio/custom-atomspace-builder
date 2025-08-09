@@ -3,8 +3,9 @@
 import json
 import os
 import shutil
-from fastapi import APIRouter, Form, HTTPException
+from fastapi import APIRouter, Form, HTTPException, File, UploadFile
 from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
+from typing import List
 from ..core.session_manager import session_manager
 from ..services.hugegraph_service import hugegraph_service
 from ..services.neo4j_service import neo4j_service
@@ -27,29 +28,76 @@ router = APIRouter(prefix="/api", tags=["jobs"])
 
 @router.post("/load", response_model=HugeGraphLoadResponse)
 async def load_data(
-    session_id: str = Form(...),
     config: str = Form(...),
     schema_json: str = Form(...),
-    writer_type: str = Form("metta")
+    writer_type: str = Form("metta"),
+    session_id: str = Form(None),  # Made optional
+    files: List[UploadFile] = File(None)  # Made optional
 ):
-    """Submit processing job using uploaded files from session."""
-    session = session_manager.get_session(session_id)
-    if not session:
-        raise HTTPException(status_code=400, detail="Invalid or expired session")
+    """Submit processing job using either uploaded files from session OR direct file upload."""
     
-    if not session.uploaded_files:
-        raise HTTPException(status_code=400, detail="No files uploaded in session")
+    # Validate that either session_id or files are provided
+    if not session_id and not files:
+        raise HTTPException(
+            status_code=400, 
+            detail="Either session_id or files must be provided"
+        )
+    
+    if session_id and files:
+        raise HTTPException(
+            status_code=400, 
+            detail="Cannot provide both session_id and files. Choose one method."
+        )
     
     try:
         config_data = json.loads(config)
         schema_data = json.loads(schema_json)
         
-        # Get session directory with uploaded files
-        session_dir = session_manager._get_session_dir(session_id)
+        # Handle session-based upload
+        if session_id:
+            session = session_manager.get_session(session_id)
+            if not session:
+                raise HTTPException(status_code=400, detail="Invalid or expired session")
+            
+            if not session.uploaded_files:
+                raise HTTPException(status_code=400, detail="No files uploaded in session")
+            
+            # Get session directory with uploaded files
+            files_dir = session_manager._get_session_dir(session_id)
+            files_source = "session"
+            
+        # Handle direct file upload
+        else:
+            if not files:
+                raise HTTPException(status_code=400, detail="No files provided")
+            
+            # Create temporary directory for direct uploads
+            import tempfile
+            temp_dir = tempfile.mkdtemp(prefix="direct_upload_")
+            
+            try:
+                # Save uploaded files to temporary directory
+                uploaded_files = []
+                for file in files:
+                    file_path = os.path.join(temp_dir, file.filename)
+                    with open(file_path, "wb") as f:
+                        content = await file.read()
+                        f.write(content)
+                    uploaded_files.append(file.filename)
+                
+                files_dir = temp_dir
+                files_source = "direct"
+                print(f"Saved {len(uploaded_files)} files to temporary directory: {temp_dir}")
+                
+            except Exception as e:
+                # Cleanup temp directory on error
+                import shutil
+                shutil.rmtree(temp_dir, ignore_errors=True)
+                raise HTTPException(status_code=500, detail=f"Failed to save uploaded files: {str(e)}")
         
         # Process data using HugeGraph service
         response = await hugegraph_service.process_data(
-            files_dir=session_dir,
+            files_dir=files_dir,
             config_data=config_data,
             schema_data=schema_data,
             writer_type=writer_type
@@ -62,11 +110,6 @@ async def load_data(
         neo4j_load_result = None
         if writer_type == WriterType.NEO4J:
             neo4j_load_result = await neo4j_service.load_data_to_neo4j(output_dir, job_id)
-            if neo4j_load_result.status == "error":
-                raise HTTPException(
-                    status_code=500, 
-                    detail=f"Failed to load data to Neo4j: {neo4j_load_result.message}"
-                )
             
             # Save load results
             if neo4j_load_result:
@@ -97,17 +140,31 @@ async def load_data(
         if neo4j_load_result and neo4j_load_result.status == "success":
             success_message += " and loaded to Neo4j"
         
+        success_message += f" (files from {files_source})"
         response.message = success_message
         
-        # Mark session as consumed and cleanup
-        session_manager.consume_session(session_id)
-        session_manager.cleanup_session(session_id)
+        # Cleanup based on source
+        if files_source == "session":
+            session_manager.consume_session(session_id)
+            session_manager.cleanup_session(session_id)
+        else:
+            import shutil
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            print(f"Cleaned up temporary directory: {temp_dir}")
         
         return response
         
     except json.JSONDecodeError as e:
+        # Cleanup temp directory if it was created
+        if 'temp_dir' in locals() and files_source == "direct":
+            import shutil
+            shutil.rmtree(temp_dir, ignore_errors=True)
         raise HTTPException(status_code=400, detail=f"Invalid JSON: {str(e)}")
     except Exception as e:
+        # Cleanup temp directory if it was created
+        if 'temp_dir' in locals() and files_source == "direct":
+            import shutil
+            shutil.rmtree(temp_dir, ignore_errors=True)
         raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
 
 
