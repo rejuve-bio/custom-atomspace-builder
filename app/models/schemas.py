@@ -144,3 +144,72 @@ class HealthResponse(BaseModel):
 class SchemaConversionResponse(BaseModel):
     status: str
     schema_groovy: str
+
+
+# Schema Suggestion Models
+class FileInfo(BaseModel):
+    name: str
+    size: int
+    type: str
+
+
+class DataSource(BaseModel):
+    id: str
+    file: FileInfo
+    columns: List[str]
+    sampleRow: List[str]
+
+
+class SchemaProperty(BaseModel):
+    name: Optional[str] = None
+    col: str
+    type: str  # 'int' | 'text' | 'double'
+    checked: bool = True
+
+
+class NodeData(BaseModel):
+    name: Optional[str] = None
+    table: Optional[str] = None
+    primaryKey: Optional[str] = None
+    properties: Dict[str, SchemaProperty]
+
+
+class SchemaNode(BaseModel):
+    id: str
+    type: str = "entity"
+    position: Dict[str, int] = {"x": 0, "y": 0}
+    data: NodeData
+
+
+class RelationData(BaseModel):
+    name: Optional[str] = None
+    reversed: Optional[bool] = None
+    table: Optional[str] = None
+    source: Optional[str] = None
+    target: Optional[str] = None
+    primaryKey: Optional[str] = None
+    error: Optional[Dict[str, str]] = None
+    properties: Dict[str, SchemaProperty]
+
+
+class SchemaEdge(BaseModel):
+    id: str
+    type: str = "relation"
+    source: str
+    target: str
+    name: str
+    data: Dict[str, RelationData]
+
+
+class SuggestedSchema(BaseModel):
+    nodes: List[SchemaNode]
+    edges: List[SchemaEdge]
+
+
+class SuggestSchemaRequest(BaseModel):
+    dataSources: List[DataSource]
+
+
+class SuggestSchemaResponse(BaseModel):
+    schema: SuggestedSchema
+    message: str = "Schema generated successfully"
