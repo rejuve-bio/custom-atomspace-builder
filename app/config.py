@@ -56,6 +56,10 @@ class Settings:
             "database": os.getenv('NEO4J_DATABASE', 'neo4j')
         }
         
+        # LLM settings
+        self.llm_provider = os.getenv('LLM_PROVIDER', 'mock')
+        self.llm_api_key = os.getenv('LLM_API_KEY')
+        
         # CORS settings
         self.cors_allow_origins = self._config['cors']['allow_origins']
         self.cors_allow_credentials = self._config['cors']['allow_credentials']

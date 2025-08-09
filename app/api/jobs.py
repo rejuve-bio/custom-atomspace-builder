@@ -11,12 +11,15 @@ from ..services.hugegraph_service import hugegraph_service
 from ..services.neo4j_service import neo4j_service
 from ..services.annotation_service import annotation_service
 from ..services.graph_info_service import graph_info_service
+from ..services.schema_suggestion_service import schema_suggestion_service
 from ..models.schemas import (
     HugeGraphLoadResponse, 
     JobSelectionRequest,
     DeleteJobResponse,
     HistoryResponse,
-    SchemaConversionResponse
+    SchemaConversionResponse,
+    SuggestSchemaRequest,
+    SuggestSchemaResponse
 )
 from ..models.enums import WriterType
 from ..utils.file_utils import get_output_files, create_zip_file
@@ -166,6 +169,27 @@ async def load_data(
             import shutil
             shutil.rmtree(temp_dir, ignore_errors=True)
         raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
+
+@router.post("/suggest-schema", response_model=SuggestSchemaResponse)
+async def suggest_schema(request: SuggestSchemaRequest):
+    """Generate schema suggestions from data source descriptions using LLM."""
+    try:
+        if not request.dataSources:
+            raise HTTPException(status_code=400, detail="No data sources provided")
+        
+        print(f"Generating schema suggestions for {len(request.dataSources)} data sources")
+        
+        # Generate schema using LLM service
+        suggested_schema = await schema_suggestion_service.suggest_schema(request.dataSources)
+        
+        return SuggestSchemaResponse(
+            schema=suggested_schema,
+            message=f"Schema generated successfully with {len(suggested_schema.nodes)} nodes and {len(suggested_schema.edges)} edges"
+        )
+        
+    except Exception as e:
+        print(f"Error in suggest_schema: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error generating schema: {str(e)}")
 
 
 @router.post("/select-job")
