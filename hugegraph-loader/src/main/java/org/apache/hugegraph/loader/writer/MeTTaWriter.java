@@ -65,9 +65,12 @@ public class MeTTaWriter implements Writer {
             String key = prop.getKey();
             Object value = prop.getValue();
             
-            if (value != null && !value.toString().isEmpty()) {
-                result.append("\n(").append(key).append(" (").append(label).append(" ").append(id).append(") ");
-                
+            result.append("\n(").append(key).append(" (").append(label).append(" ").append(id).append(") ");
+            
+            // Handle null or empty values
+            if (value == null || value.toString().isEmpty()) {
+                result.append("N/A");
+            } else {
                 // Handle different property types
                 if (value instanceof List) {
                     result.append("(");
@@ -82,9 +85,9 @@ public class MeTTaWriter implements Writer {
                 } else {
                     result.append(checkProperty(value.toString()));
                 }
-                
-                result.append(")");
             }
+            
+            result.append(")");
         }
         
         return result.toString();
@@ -127,11 +130,14 @@ public class MeTTaWriter implements Writer {
             String key = prop.getKey();
             Object value = prop.getValue();
             
-            if (value != null && !value.toString().isEmpty()) {
-                result.append("\n(").append(key).append(" (").append(label)
-                      .append(" (").append(sourceLabel).append(" ").append(sourceId).append(") ")
-                      .append("(").append(targetLabel).append(" ").append(targetId).append(")) ");
-                
+            result.append("\n(").append(key).append(" (").append(label)
+                  .append(" (").append(sourceLabel).append(" ").append(sourceId).append(") ")
+                  .append("(").append(targetLabel).append(" ").append(targetId).append(")) ");
+            
+            // Handle null or empty values
+            if (value == null || value.toString().isEmpty()) {
+                result.append("N/A");
+            } else {
                 // Handle different property types
                 if (value instanceof List) {
                     result.append("(");
@@ -146,9 +152,9 @@ public class MeTTaWriter implements Writer {
                 } else {
                     result.append(checkProperty(value.toString()));
                 }
-                
-                result.append(")");
             }
+            
+            result.append(")");
         }
         
         return result.toString();
