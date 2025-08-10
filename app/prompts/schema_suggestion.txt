@@ -14,9 +14,9 @@ interface Node {
   type: "entity";
   position: {x: 0, y: 0};
   data: {
-    name?: string;
-    table?: string;
-    primaryKey?: string;
+    name: string;
+    table: string;
+    primaryKey: string;
     properties: {
       [key: string]: {
         name?: string;
@@ -40,12 +40,12 @@ interface Relation {
   name: string;
   data: {
     [key: string]: {
-      name?: string;
-      reversed?: boolean;
-      table?: string;
-      source?: string;
-      target?: string;
-      primaryKey?: string;
+      name: string; # don't make the name field null
+      reversed: boolean;
+      table: string;
+      source: string;
+      target: string;
+      primaryKey: string;
       error?: { [key: string]: string };
       properties: {
         [key: string]: {
@@ -66,6 +66,11 @@ interface Schema {
   nodes: Node[];
   edges: Edge[];
 }
+
+for multiple edges between the same two nodes, do not add an entry in the edges array. Instead if an edge already exists between two nodes, add a key to its data field and add configuration for the new connection. Check the semantics of the connection and set reversed to true, if the connection makes semantical  sense to go from the target node to the source node.
+source and target fields in the data field of edges, refer to the columns in its data that contain the IDs of the source and target nodes.
+
+- there should not be two edge entries that connect the same two nodes.
 
 Guidelines for schema generation:
 1. Identify node files (usually contain "nodes_" in filename or are standalone entity files)
