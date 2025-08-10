@@ -1,5 +1,6 @@
 """Schema suggestion service using LLM."""
 
+import asyncio
 import json
 import os
 import re
@@ -214,26 +215,46 @@ class SchemaSuggestionService:
         return cleaned
     
     async def _call_openai(self, prompt: str) -> str:
-        """Call OpenAI API."""
-        try:
-            # Implement OpenAI API call
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    "https://api.openai.com/v1/responses",
-                    headers={
-                        "Authorization": f"Bearer {self.api_key}",
-                        "Content-Type": "application/json"
-                    },
-                    json={
-                        "model": "gpt-4.1",
-                        "input": prompt,
-                        "temperature": 0.1
-                    }
-                )
+        """Call OpenAI API with retry on transient errors."""
+        max_retries = 5
+        backoff = 1  # seconds
+
+        for attempt in range(1, max_retries + 1):
+            try:
+                async with httpx.AsyncClient(timeout=60) as client:
+                    response = await client.post(
+                        "https://api.openai.com/v1/responses",
+                        headers={
+                            "Authorization": f"Bearer {self.api_key}",
+                            "Content-Type": "application/json"
+                        },
+                        json={
+                            "model": "gpt-4.1",
+                            "input": prompt,
+                            "temperature": 0
+                        }
+                    )
+
+                if response.status_code != 200:
+                    raise Exception(
+                        f"OpenAI API call failed with status {response.status_code}: {response.text}"
+                    )
+
                 result = response.json()
-                return self._clean_json_response(result["output"][0]["content"][0]["text"])
-        except Exception as e:
-            raise Exception(f"OpenAI API call failed: {e}")
+                return self._clean_json_response(
+                    result["output"][0]["content"][0]["text"]
+                )
+
+            except (httpx.RequestError, httpx.ConnectError, httpx.ConnectTimeout) as e:
+                if attempt == max_retries:
+                    raise Exception(f"OpenAI API request failed after {max_retries} attempts: {str(e)}")
+                wait_time = backoff * (2 ** (attempt - 1))
+                print(f"Attempt {attempt} failed ({e}), retrying in {wait_time}s...")
+                await asyncio.sleep(wait_time)
+
+            except Exception as e:
+                # Don't retry on parsing or other non-network errors
+                raise Exception(f"OpenAI API call failed: {str(e)}")
     
     async def _call_anthropic(self, prompt: str) -> str:
         """Call Anthropic API."""
