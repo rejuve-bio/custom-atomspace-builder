@@ -18,7 +18,7 @@ class SchemaSuggestionService:
         # You can configure different LLM providers here
         self.llm_provider =  settings.llm_provider
         self.api_key = settings.llm_api_key
-        self.prompt_file = os.path.join(os.path.dirname(__file__), "..", "prompts", "schema_suggestion.txt")
+        self.prompt_file = os.path.join(os.path.dirname(__file__), "..", "prompts", "schema_suggestion_v2.txt")
         
     async def suggest_schema(self, data_sources: List[DataSource]) -> SuggestedSchema:
         """Generate schema suggestion from data sources."""

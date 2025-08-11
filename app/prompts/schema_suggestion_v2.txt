@@ -1,0 +1,613 @@
+I have an array of data source objects describing a csv file. I want to convert them into a knowledge graph schema. Some of the data source objects represent entities and others represent connections between entities. Entities implement the interface "Entity" and connections implement the interface "Connection". Each object in the input data sources array implements the interface "DataSource".
+
+```typescript
+interface DataSource {
+  id: string;
+  file: File;
+  columns: string[];
+  sampleRow: string[];
+}
+
+interface Node {
+  id: string;
+  type: "entity";
+  position: {x: 0, y: 0};
+  data: {
+    name: string;
+    table: string;
+    primaryKey: string;
+    properties: {
+      [key: string]: Property;
+    };
+  };
+}
+
+interface Connection {
+  id: string;
+  type: "relation";
+  source: string;
+  target: string;
+  name: string;
+  data: {
+    [key: string]: ConnectionType;
+  };
+}
+
+interface ConnectionType {
+  name: string;
+  reversed: boolean;
+  table: string;
+  source: string;
+  target: string;
+  error?: { [key: string]: string };
+  properties: {
+    [key: string]: Property;
+  };
+}
+
+interface Property {
+  name?: string;
+  col: string;
+  type: 'int' | 'text' | 'double';
+  checked: true;
+}
+
+interface Schema {
+  nodes: Entity[];
+  edges: Connection[];
+}
+```
+
+**Rules:**
+- All of the columns in the "columns" field of the data source needs to be included in the "properties" field of entities and connections.
+- The "table" field is the "id" field of the data source file associated with the entity or connection.
+- Each property may define a unique "name" field to avoid collision with other properties.
+- In the "Connection" interface, "source" and "target" refer to the "id" field of the nodes it is connecting.
+- In the "ConnectionType" interface, "source" and "target" refer to the headers of the data source that contains the IDs of the source and target entities respectively. For example, for a ConnectionType that connects a person entity with a company entity, the "source" and "target" fields maybe set to "person_id" and "company_id" respectively, given those fields are present in the data source headers array.
+- No two nodes can have multiple Connection objects in the schema. If they have multiple relationships, they will have a single Connection object with multiple ConnectionType values set on it. For example, if person and company has "works_at" and "pays_salary_to" relationships, the schema will have a single Connection object for these two entities, with two ConnectionType values set on it each with its own configuration. Since "pays_salary_to" is semantically correct with company set as source and person as target, its "reversed" field will be set to true to indicate its semantic direction.
+- Return only valid JSON. Do not include markdown formatting, triple backticks, or explanations. The response must start with { and end with }.
+
+**Example Data Sources:**
+[
+  {
+    "id":"FxP9qO",
+    "file":{
+      "name":"in_neighborhood.csv",
+      "size":997,
+      "type":"text/csv"
+    },
+    "columns":[
+      "inneighborhood_id",
+      "property_id",
+      "neighborhood_id"
+    ],
+    "sampleRow":[
+      "01JVCZPVRJ1EMHM0ZSY2MYZ0NE",
+      "1",
+      "1"
+    ]
+  },
+  {
+    "id":"IiiTaI",
+    "file":{
+      "name":"knows.csv",
+      "size":8686,
+      "type":"text/csv"
+    },
+    "columns":[
+      "knows_id",
+      "person_id_1",
+      "person_id_2",
+      "relationship"
+    ],
+    "sampleRow":[
+      "01JVD064Z5BYJBFHHTSCD5BNGY",
+      "1",
+      "15",
+      "Friend"
+    ]
+  },
+  {
+    "id":"jc1Pee",
+    "file":{
+      "name":"listed_by.csv",
+      "size":1345,
+      "type":"text/csv"
+    },
+    "columns":[
+      "listedby_id",
+      "property_id",
+      "person_id",
+      "listing_date"
+    ],
+    "sampleRow":[
+      "01JVD07RMJBHP610TG5X8EFQ0J",
+      "1",
+      "192",
+      "8/29/2022"
+    ]
+  },
+  {
+    "id":"VyAbP2",
+    "file":{
+      "name":"lives_in.csv",
+      "size":10652,
+      "type":"text/csv"
+    },
+    "columns":[
+      "livesin_id",
+      "person_id",
+      "property_id",
+      "move_in_date",
+      "move_out_date"
+    ],
+    "sampleRow":[
+      "01JVD09YR2DXQF9SPY99FGZ078",
+      "1",
+      "2",
+      "8/14/2002",
+      "6/30/2011"
+    ]
+  },
+  {
+    "id":"iucEcq",
+    "file":{
+      "name":"nearby.csv",
+      "size":97,
+      "type":"text/csv"
+    },
+    "columns":[
+      "nearby_id",
+      "neighborhood_id_1",
+      "neighborhood_id_2",
+      "distance_km"
+    ],
+    "sampleRow":[
+      "1",
+      "1",
+      "2",
+      "377.66"
+    ]
+  },
+  {
+    "id":"FVOTZQ",
+    "file":{
+      "name":"neighborhood.csv",
+      "size":187,
+      "type":"text/csv"
+    },
+    "columns":[
+      "neighborhood_id",
+      "name",
+      "city",
+      "state"
+    ],
+    "sampleRow":[
+      "1",
+      "Bluestem",
+      "Louisville",
+      "Kentucky"
+    ]
+  },
+  {
+    "id":"bzZjuR",
+    "file":{
+      "name":"owns.csv",
+      "size":2959,
+      "type":"text/csv"
+    },
+    "columns":[
+      "owns_id",
+      "person_id",
+      "property_id",
+      "ownership_start",
+      "ownership_end"
+    ],
+    "sampleRow":[
+      "1",
+      "12",
+      "117",
+      "6/15/2005",
+      "11/17/2006"
+    ]
+  },
+  {
+    "id":"yB1Q34",
+    "file":{
+      "name":"property.csv",
+      "size":2009,
+      "type":"text/csv"
+    },
+    "columns":[
+      "property_id",
+      "address",
+      "city",
+      "state",
+      "zip_code",
+      "property_type",
+      "bedrooms",
+      "bathrooms",
+      "square_feet",
+      "year_built"
+    ],
+    "sampleRow":[
+      "1",
+      "42 Drewry Court",
+      "Atlanta",
+      "GA",
+      "30323",
+      "Ranch",
+      "5",
+      "2",
+      "5420",
+      "2006"
+    ]
+  },
+  {
+    "id":"lausTI",
+    "file":{
+      "name":"person.csv",
+      "size":14814,
+      "type":"text/csv"
+    },
+    "columns":[
+      "person_id",
+      "name",
+      "role",
+      "phone",
+      "email"
+    ],
+    "sampleRow":[
+      "1",
+      "Mirilla Petchell",
+      "VP Product Management",
+      "676-479-5124",
+      "mpetchell0@phpbb.com"
+    ]
+  }
+]
+
+**Example Generated Schema:**
+{
+  "nodes":[
+    {
+      "id":"1",
+      "type":"entity",
+      "position":{
+        "x":0,
+        "y":0
+      },
+      "data":{
+        "properties":{
+          "0pYpg_":{
+            "col":"property_id",
+            "checked":true,
+            "type":"text"
+          },
+          "7lPQFq":{
+            "col":"address",
+            "checked":true,
+            "type":"text"
+          },
+          "Uhm2on":{
+            "col":"city",
+            "checked":true,
+            "type":"text"
+          },
+          "9PJ1vO":{
+            "col":"state",
+            "checked":true,
+            "type":"text"
+          },
+          "95BI7C":{
+            "col":"zip_code",
+            "checked":true,
+            "type":"text"
+          },
+          "Bnak-Z":{
+            "col":"property_type",
+            "checked":true,
+            "type":"text"
+          },
+          "GtvNaz":{
+            "col":"bedrooms",
+            "checked":true,
+            "type":"int"
+          },
+          "RSM1nf":{
+            "col":"bathrooms",
+            "checked":true,
+            "type":"int"
+          },
+          "rwWywg":{
+            "col":"square_feet",
+            "checked":true,
+            "type":"double"
+          },
+          "T-jX-C":{
+            "col":"year_built",
+            "checked":true,
+            "type":"int"
+          }
+        },
+        "error":{
+          
+        },
+        "table":"yB1Q34",
+        "primaryKey":"0pYpg_",
+        "name":"Property"
+      }
+    },
+    {
+      "id":"mCZlJk",
+      "type":"entity",
+      "data":{
+        "properties":{
+          "l6xCud":{
+            "col":"person_id",
+            "checked":true,
+            "type":"text"
+          },
+          "nhWY1W":{
+            "col":"name",
+            "checked":true,
+            "type":"text"
+          },
+          "S8shQA":{
+            "col":"role",
+            "checked":true,
+            "type":"text"
+          },
+          "FUvz7I":{
+            "col":"phone",
+            "checked":true,
+            "type":"text"
+          },
+          "YrUqWD":{
+            "col":"email",
+            "checked":true,
+            "type":"text"
+          }
+        },
+        "error":{
+          
+        },
+        "table":"lausTI",
+        "primaryKey":"l6xCud",
+        "name":"Person"
+      },
+      "position":{
+        "x":0,
+        "y":0
+      }
+    },
+    {
+      "id":"wSCtEM",
+      "type":"entity",
+      "data":{
+        "properties":{
+          "EdigiE":{
+            "col":"neighborhood_id",
+            "checked":true,
+            "type":"text"
+          },
+          "jlWlK_":{
+            "col":"name",
+            "checked":true,
+            "type":"text"
+          },
+          "JYmxiy":{
+            "col":"city",
+            "checked":true,
+            "type":"text"
+          },
+          "jJFYaM":{
+            "col":"state",
+            "checked":true,
+            "type":"text"
+          }
+        },
+        "error":{
+          
+        },
+        "table":"FVOTZQ",
+        "primaryKey":"EdigiE",
+        "name":"Neighborhood"
+      },
+      "position":{
+        "x":0,
+        "y":0
+      }
+    }
+  ],
+  "edges":[
+    {
+      "id":"FESYz0",
+      "type":"relation",
+      "source":"1",
+      "target":"mCZlJk",
+      "data":{
+        "ElZIY3":{
+          "properties":{
+            "AQQ_bC":{
+              "col":"listedby_id",
+              "checked":true,
+              "type":"text"
+            },
+            "WAqsIC":{
+              "col":"property_id",
+              "checked":true,
+              "type":"text"
+            },
+            "1eBhYI":{
+              "col":"person_id",
+              "checked":true,
+              "type":"text"
+            },
+            "n_MYlI":{
+              "col":"listing_date",
+              "checked":true,
+              "type":"text"
+            }
+          },
+          "error":{
+            
+          },
+          "table":"jc1Pee",
+          "name":"listed by",
+          "source":"property_id",
+          "target":"person_id"
+        },
+        "9f0eNl":{
+          "properties":{
+            "DJP6YN":{
+              "col":"owns_id",
+              "checked":true,
+              "type":"text"
+            },
+            "XsUlT6":{
+              "col":"person_id",
+              "checked":true,
+              "type":"text"
+            },
+            "TVoPTa":{
+              "col":"property_id",
+              "checked":true,
+              "type":"text"
+            },
+            "iAaIG6":{
+              "col":"ownership_start",
+              "checked":true,
+              "type":"text"
+            },
+            "hz9-3Q":{
+              "col":"ownership_end",
+              "checked":true,
+              "type":"text"
+            }
+          },
+          "error":{
+            
+          },
+          "table":"bzZjuR",
+          "name":"owns",
+          "reversed":true,
+          "source":"person_id",
+          "target":"property_id"
+        },
+        "SzQg4i":{
+          "properties":{
+            "lvsIzb":{
+              "col":"livesin_id",
+              "checked":true,
+              "type":"text"
+            },
+            "2II7no":{
+              "col":"person_id",
+              "checked":true,
+              "type":"text"
+            },
+            "9DU13K":{
+              "col":"property_id",
+              "checked":true,
+              "type":"text"
+            },
+            "HwQbl1":{
+              "col":"move_in_date",
+              "checked":true,
+              "type":"text"
+            },
+            "urXS5h":{
+              "col":"move_out_date",
+              "checked":true,
+              "type":"text"
+            }
+          },
+          "error":{
+            
+          },
+          "table":"VyAbP2",
+          "name":"lives in",
+          "reversed":true,
+          "source":"person_id",
+          "target":"property_id"
+        }
+      }
+    },
+    {
+      "id":"uBviIN",
+      "type":"relation",
+      "source":"1",
+      "target":"wSCtEM",
+      "data":{
+        "lrNk0-":{
+          "properties":{
+            "J8oH3c":{
+              "col":"inneighborhood_id",
+              "checked":true,
+              "type":"text"
+            },
+            "Xqt-8w":{
+              "col":"property_id",
+              "checked":true,
+              "type":"text"
+            },
+            "J4M3xc":{
+              "col":"neighborhood_id",
+              "checked":true,
+              "type":"text"
+            }
+          },
+          "error":{
+            
+          },
+          "table":"FxP9qO",
+          "name":"found in",
+          "source":"property_id",
+          "target":"neighborhood_id"
+        }
+      }
+    },
+    {
+      "id":"1gH5eF",
+      "type":"relation",
+      "source":"mCZlJk",
+      "target":"mCZlJk",
+      "data":{
+        "VtIig5":{
+          "properties":{
+            "e3ypqw":{
+              "col":"knows_id",
+              "checked":true,
+              "type":"text"
+            },
+            "ZSqHhH":{
+              "col":"person_id_1",
+              "checked":true,
+              "type":"text"
+            },
+            "ezEcpK":{
+              "col":"person_id_2",
+              "checked":true,
+              "type":"text"
+            },
+            "ast6eH":{
+              "col":"relationship",
+              "checked":true,
+              "type":"text"
+            }
+          },
+          "error":{
+            
+          },
+          "table":"IiiTaI",
+          "name":"knows",
+          "source":"person_id_1",
+          "target":"person_id_2"
+        }
+      }
+    }
+  ]
+}
+
+Generate a schema for the following data sources: 
