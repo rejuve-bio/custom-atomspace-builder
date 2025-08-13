@@ -65,6 +65,7 @@ interface Schema {
 - In the "Connection" interface, "source" and "target" refer to the "id" field of the nodes it is connecting.
 - In the "ConnectionType" interface, "source" and "target" refer to the headers of the data source that contains the IDs of the source and target entities respectively. For example, for a ConnectionType that connects a person entity with a company entity, the "source" and "target" fields maybe set to "person_id" and "company_id" respectively, given those fields are present in the data source headers array.
 - No two nodes can have multiple Connection objects in the schema. If they have multiple relationships, they will have a single Connection object with multiple ConnectionType values set on it. For example, if person and company has "works_at" and "pays_salary_to" relationships, the schema will have a single Connection object for these two entities, with two ConnectionType values set on it each with its own configuration. Since "pays_salary_to" is semantically correct with company set as source and person as target, its "reversed" field will be set to true to indicate its semantic direction.
+- The name of the node or edges must not be space-separated; if they are more than one word, they must be separated by an underscore.
 - Return only valid JSON. Do not include markdown formatting, triple backticks, or explanations. The response must start with { and end with }.
 
 **Example Data Sources:**
@@ -72,7 +73,7 @@ interface Schema {
   {
     "id":"FxP9qO",
     "file":{
-      "name":"in_neighborhood.csv",
+      "name":"data1.csv",
       "size":997,
       "type":"text/csv"
     },
@@ -90,7 +91,7 @@ interface Schema {
   {
     "id":"IiiTaI",
     "file":{
-      "name":"knows.csv",
+      "name":"data2.csv",
       "size":8686,
       "type":"text/csv"
     },
@@ -110,7 +111,7 @@ interface Schema {
   {
     "id":"jc1Pee",
     "file":{
-      "name":"listed_by.csv",
+      "name":"data3.csv",
       "size":1345,
       "type":"text/csv"
     },
@@ -130,7 +131,7 @@ interface Schema {
   {
     "id":"VyAbP2",
     "file":{
-      "name":"lives_in.csv",
+      "name":"ds4.csv",
       "size":10652,
       "type":"text/csv"
     },
@@ -152,7 +153,7 @@ interface Schema {
   {
     "id":"iucEcq",
     "file":{
-      "name":"nearby.csv",
+      "name":"data5.csv",
       "size":97,
       "type":"text/csv"
     },
@@ -172,7 +173,7 @@ interface Schema {
   {
     "id":"FVOTZQ",
     "file":{
-      "name":"neighborhood.csv",
+      "name":"dataset6.csv",
       "size":187,
       "type":"text/csv"
     },
@@ -192,7 +193,7 @@ interface Schema {
   {
     "id":"bzZjuR",
     "file":{
-      "name":"owns.csv",
+      "name":"data7.csv",
       "size":2959,
       "type":"text/csv"
     },
@@ -214,7 +215,7 @@ interface Schema {
   {
     "id":"yB1Q34",
     "file":{
-      "name":"property.csv",
+      "name":"data7.csv",
       "size":2009,
       "type":"text/csv"
     },
@@ -246,7 +247,7 @@ interface Schema {
   {
     "id":"lausTI",
     "file":{
-      "name":"person.csv",
+      "name":"ds8.csv",
       "size":14814,
       "type":"text/csv"
     },
@@ -454,7 +455,7 @@ interface Schema {
             
           },
           "table":"jc1Pee",
-          "name":"listed by",
+          "name":"listed_by",
           "source":"property_id",
           "target":"person_id"
         },
@@ -527,7 +528,7 @@ interface Schema {
             
           },
           "table":"VyAbP2",
-          "name":"lives in",
+          "name":"lives_in",
           "reversed":true,
           "source":"person_id",
           "target":"property_id"
@@ -562,7 +563,7 @@ interface Schema {
             
           },
           "table":"FxP9qO",
-          "name":"found in",
+          "name":"found_in",
           "source":"property_id",
           "target":"neighborhood_id"
         }

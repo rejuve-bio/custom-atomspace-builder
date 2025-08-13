@@ -170,7 +170,7 @@ async def load_data(
             shutil.rmtree(temp_dir, ignore_errors=True)
         raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
 
-@router.post("/suggest-schema", response_model=SuggestSchemaResponse)
+@router.post("/suggest-schema", response_model=JSONResponse)
 async def suggest_schema(request: SuggestSchemaRequest):
     """Generate schema suggestions from data source descriptions using LLM."""
     try:
@@ -182,11 +182,16 @@ async def suggest_schema(request: SuggestSchemaRequest):
         # Generate schema using LLM service
         suggested_schema = await schema_suggestion_service.suggest_schema(request.dataSources)
         
-        return SuggestSchemaResponse(
-            schema=suggested_schema,
-            message=f"Schema generated successfully with {len(suggested_schema.nodes)} nodes and {len(suggested_schema.edges)} edges"
-        )
+        # return SuggestSchemaResponse(
+        #     schema=suggested_schema,
+        #     message=f"Schema generated successfully with {len(suggested_schema.nodes)} nodes and {len(suggested_schema.edges)} edges"
+        # )
         
+        return JSONResponse(
+            content=suggested_schema,
+            status_code=200,
+            headers={"Content-Type": "application/json"}
+        )
     except Exception as e:
         print(f"Error in suggest_schema: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error generating schema: {str(e)}")
