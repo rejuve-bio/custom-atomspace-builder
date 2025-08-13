@@ -1,10 +1,11 @@
 """Schema suggestion service using LLM."""
 
 import asyncio
+from copy import deepcopy
 import json
 import os
 import re
-from typing import List
+from typing import Any, Dict, List
 import httpx
 from ..models.schemas import DataSource, SuggestedSchema
 from ..config import settings
@@ -18,9 +19,9 @@ class SchemaSuggestionService:
         # You can configure different LLM providers here
         self.llm_provider =  settings.llm_provider
         self.api_key = settings.llm_api_key
-        self.prompt_file = os.path.join(os.path.dirname(__file__), "..", "prompts", "schema_suggestion.txt")
+        self.prompt_file = os.path.join(os.path.dirname(__file__), "..", "prompts", "schema_suggestion_v2.txt")
         
-    async def suggest_schema(self, data_sources: List[DataSource]) -> SuggestedSchema:
+    async def suggest_schema(self, data_sources: List[DataSource]):
         """Generate schema suggestion from data sources."""
         
         # Create the prompt
@@ -39,7 +40,8 @@ class SchemaSuggestionService:
         # Parse and validate the response
         try:
             schema_data = json.loads(schema_json)
-            return SuggestedSchema(**schema_data)
+            schema_data = self._normalize_schema(schema_data)
+            return {"schema": schema_data}
         except Exception as e:
             print(f"Error parsing LLM response: {e}")
             # Return a basic fallback schema
@@ -74,6 +76,51 @@ class SchemaSuggestionService:
         prompt = prompt_template + "\n\n" + json.dumps(data_sources_json, indent=2)
         
         return prompt
+    
+    def _normalize_schema(self, schema):
+        schema = deepcopy(schema)
+
+        # 1. Ensure node IDs match their table values
+        table_to_id = {}
+        for node in schema["nodes"]:
+            node["id"] = node["data"]["table"]
+            table_to_id[node["data"]["name"].lower()] = node["id"]
+
+        # 2. Merge edges between same source/target
+        merged_edges = {}
+        for edge in schema["edges"]:
+            src_id = table_to_id.get(edge["source"], edge["source"])
+            tgt_id = table_to_id.get(edge["target"], edge["target"])
+
+            # Normalize source/target IDs in edges
+            edge["source"] = src_id
+            edge["target"] = tgt_id
+
+            key = (src_id, tgt_id)
+            if key not in merged_edges:
+                merged_edges[key] = {
+                    "id": f"{src_id}-{tgt_id}",
+                    "type": "relation",
+                    "source": src_id,
+                    "target": tgt_id,
+                    "data": {}
+                }
+
+            # Merge all connection types inside data
+            for conn_type, conn_data in edge["data"].items():
+                merged_edges[key]["data"][conn_type] = conn_data
+
+        # 3. Detect reversed edges and merge them into the correct edge
+        for (src, tgt), edge in list(merged_edges.items()):
+            reverse_key = (tgt, src)
+            if reverse_key in merged_edges and reverse_key != (src, tgt):
+                reverse_edge = merged_edges.pop(reverse_key)
+                for conn_type, conn_data in reverse_edge["data"].items():
+                    conn_data["reversed"] = True
+                    edge["data"][conn_type] = conn_data
+
+        schema["edges"] = list(merged_edges.values())
+        return schema
     
     def _get_fallback_prompt(self) -> str:
         """Fallback prompt if file is not found."""
