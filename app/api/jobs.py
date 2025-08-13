@@ -170,7 +170,7 @@ async def load_data(
             shutil.rmtree(temp_dir, ignore_errors=True)
         raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
 
-@router.post("/suggest-schema", response_model=JSONResponse)
+@router.post("/suggest-schema")
 async def suggest_schema(request: SuggestSchemaRequest):
     """Generate schema suggestions from data source descriptions using LLM."""
     try:

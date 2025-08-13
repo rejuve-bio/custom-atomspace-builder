@@ -21,7 +21,7 @@ class SchemaSuggestionService:
         self.api_key = settings.llm_api_key
         self.prompt_file = os.path.join(os.path.dirname(__file__), "..", "prompts", "schema_suggestion_v2.txt")
         
-    async def suggest_schema(self, data_sources: List[DataSource]) -> Dict[str, Any]:
+    async def suggest_schema(self, data_sources: List[DataSource]):
         """Generate schema suggestion from data sources."""
         
         # Create the prompt
