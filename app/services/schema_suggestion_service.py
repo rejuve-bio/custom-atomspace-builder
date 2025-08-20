@@ -81,20 +81,23 @@ class SchemaSuggestionService:
         schema = deepcopy(schema)
 
         # 1. Ensure node IDs match their table values
-        table_to_id = {}
-        for node in schema["nodes"]:
-            node["id"] = node["data"]["table"]
-            table_to_id[node["data"]["name"].lower()] = node["id"]
+        # table_to_id = {}
+        # for node in schema["nodes"]:
+        #     node["id"] = node["data"]["table"]
+        #     table_to_id[node["data"]["name"].lower()] = node["id"]
 
         # 2. Merge edges between same source/target
         merged_edges = {}
         for edge in schema["edges"]:
-            src_id = table_to_id.get(edge["source"], edge["source"])
-            tgt_id = table_to_id.get(edge["target"], edge["target"])
+            # src_id = table_to_id.get(edge["source"], edge["source"])
+            # tgt_id = table_to_id.get(edge["target"], edge["target"])
 
-            # Normalize source/target IDs in edges
-            edge["source"] = src_id
-            edge["target"] = tgt_id
+            src_id = edge["source"]
+            tgt_id = edge["target"]
+
+            # # Normalize source/target IDs in edges
+            # edge["source"] = src_id
+            # edge["target"] = tgt_id
 
             key = (src_id, tgt_id)
             if key not in merged_edges:

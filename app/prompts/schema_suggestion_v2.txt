@@ -62,7 +62,7 @@ interface Schema {
 - All of the columns in the "columns" field of the data source needs to be included in the "properties" field of entities and connections.
 - The "table" field is the "id" field of the data source file associated with the entity or connection.
 - Each property may define a unique "name" field to avoid collision with other properties.
-- In the "Connection" interface, "source" and "target" refer to the "id" field of the nodes it is connecting.
+- In the "Connection" interface, "source" and "target" refer to the "id" field of the nodes it is connecting (not the node name).
 - In the "ConnectionType" interface, "source" and "target" refer to the headers of the data source that contains the IDs of the source and target entities respectively. For example, for a ConnectionType that connects a person entity with a company entity, the "source" and "target" fields maybe set to "person_id" and "company_id" respectively, given those fields are present in the data source headers array.
 - No two nodes can have multiple Connection objects in the schema. If they have multiple relationships, they will have a single Connection object with multiple ConnectionType values set on it. For example, if person and company has "works_at" and "pays_salary_to" relationships, the schema will have a single Connection object for these two entities, with two ConnectionType values set on it each with its own configuration. Since "pays_salary_to" is semantically correct with company set as source and person as target, its "reversed" field will be set to true to indicate its semantic direction.
 - The name of the node or edges must not be space-separated; if they are more than one word, they must be separated by an underscore.
@@ -83,7 +83,7 @@ interface Schema {
       "neighborhood_id"
     ],
     "sampleRow":[
-      "01JVCZPVRJ1EMHM0ZSY2MYZ0NE",
+      "01JVC",
       "1",
       "1"
     ]
@@ -102,7 +102,7 @@ interface Schema {
       "relationship"
     ],
     "sampleRow":[
-      "01JVD064Z5BYJBFHHTSCD5BNGY",
+      "01JVD",
       "1",
       "15",
       "Friend"
@@ -122,7 +122,7 @@ interface Schema {
       "listing_date"
     ],
     "sampleRow":[
-      "01JVD07RMJBHP610TG5X8EFQ0J",
+      "01JVD",
       "1",
       "192",
       "8/29/2022"
@@ -143,7 +143,7 @@ interface Schema {
       "move_out_date"
     ],
     "sampleRow":[
-      "01JVD09YR2DXQF9SPY99FGZ078",
+      "01JVD",
       "1",
       "2",
       "8/14/2002",
@@ -279,53 +279,56 @@ interface Schema {
         "y":0
       },
       "data":{
+        "name":"Property",
+        "table":"yB1Q34",
+        "primaryKey":"prop1",
         "properties":{
-          "0pYpg_":{
+          "prop1":{
             "col":"property_id",
             "checked":true,
             "type":"text"
           },
-          "7lPQFq":{
+          "prop2":{
             "col":"address",
             "checked":true,
             "type":"text"
           },
-          "Uhm2on":{
+          "prop3":{
             "col":"city",
             "checked":true,
             "type":"text"
           },
-          "9PJ1vO":{
+          "prop4":{
             "col":"state",
             "checked":true,
             "type":"text"
           },
-          "95BI7C":{
+          "prop5":{
             "col":"zip_code",
             "checked":true,
             "type":"text"
           },
-          "Bnak-Z":{
+          "prop6":{
             "col":"property_type",
             "checked":true,
             "type":"text"
           },
-          "GtvNaz":{
+          "prop7":{
             "col":"bedrooms",
             "checked":true,
             "type":"int"
           },
-          "RSM1nf":{
+          "prop8":{
             "col":"bathrooms",
             "checked":true,
             "type":"int"
           },
-          "rwWywg":{
+          "prop9":{
             "col":"square_feet",
             "checked":true,
             "type":"double"
           },
-          "T-jX-C":{
+          "prop10":{
             "col":"year_built",
             "checked":true,
             "type":"int"
@@ -333,38 +336,38 @@ interface Schema {
         },
         "error":{
           
-        },
-        "table":"yB1Q34",
-        "primaryKey":"0pYpg_",
-        "name":"Property"
+        }
       }
     },
     {
       "id":"mCZlJk",
       "type":"entity",
       "data":{
+        "name":"Person",
+        "table":"lausTI",
+        "primaryKey":"prop11",
         "properties":{
-          "l6xCud":{
+          "prop11":{
             "col":"person_id",
             "checked":true,
             "type":"text"
           },
-          "nhWY1W":{
+          "prop12":{
             "col":"name",
             "checked":true,
             "type":"text"
           },
-          "S8shQA":{
+          "prop13":{
             "col":"role",
             "checked":true,
             "type":"text"
           },
-          "FUvz7I":{
+          "prop14":{
             "col":"phone",
             "checked":true,
             "type":"text"
           },
-          "YrUqWD":{
+          "prop15":{
             "col":"email",
             "checked":true,
             "type":"text"
@@ -372,10 +375,7 @@ interface Schema {
         },
         "error":{
           
-        },
-        "table":"lausTI",
-        "primaryKey":"l6xCud",
-        "name":"Person"
+        }
       },
       "position":{
         "x":0,
@@ -386,23 +386,26 @@ interface Schema {
       "id":"wSCtEM",
       "type":"entity",
       "data":{
+        "name":"Neighborhood",
+        "table":"FVOTZQ",
+        "primaryKey":"prop16",
         "properties":{
-          "EdigiE":{
+          "prop16":{
             "col":"neighborhood_id",
             "checked":true,
             "type":"text"
           },
-          "jlWlK_":{
+          "prop17":{
             "col":"name",
             "checked":true,
             "type":"text"
           },
-          "JYmxiy":{
+          "prop18":{
             "col":"city",
             "checked":true,
             "type":"text"
           },
-          "jJFYaM":{
+          "prop19":{
             "col":"state",
             "checked":true,
             "type":"text"
@@ -410,10 +413,7 @@ interface Schema {
         },
         "error":{
           
-        },
-        "table":"FVOTZQ",
-        "primaryKey":"EdigiE",
-        "name":"Neighborhood"
+        }
       },
       "position":{
         "x":0,
@@ -425,27 +425,31 @@ interface Schema {
     {
       "id":"FESYz0",
       "type":"relation",
-      "source":"1",
-      "target":"mCZlJk",
+      "source":"1", # this is the node id
+      "target":"mCZlJk", # this is the node id
       "data":{
         "ElZIY3":{
+          "name":"listed_by",
+          "source":"property_id",
+          "target":"person_id",
+          "table":"jc1Pee",
           "properties":{
-            "AQQ_bC":{
+            "prop20":{
               "col":"listedby_id",
               "checked":true,
               "type":"text"
             },
-            "WAqsIC":{
+            "prop21":{
               "col":"property_id",
               "checked":true,
               "type":"text"
             },
-            "1eBhYI":{
+            "prop22":{
               "col":"person_id",
               "checked":true,
               "type":"text"
             },
-            "n_MYlI":{
+            "prop23":{
               "col":"listing_date",
               "checked":true,
               "type":"text"
@@ -453,35 +457,36 @@ interface Schema {
           },
           "error":{
             
-          },
-          "table":"jc1Pee",
-          "name":"listed_by",
-          "source":"property_id",
-          "target":"person_id"
+          }
         },
         "9f0eNl":{
+          "name":"owns",
+          "reversed":true,
+          "source":"person_id",
+          "target":"property_id",
+          "table":"bzZjuR",
           "properties":{
-            "DJP6YN":{
+            "prop24":{
               "col":"owns_id",
               "checked":true,
               "type":"text"
             },
-            "XsUlT6":{
+            "prop25":{
               "col":"person_id",
               "checked":true,
               "type":"text"
             },
-            "TVoPTa":{
+            "prop26":{
               "col":"property_id",
               "checked":true,
               "type":"text"
             },
-            "iAaIG6":{
+            "prop27":{
               "col":"ownership_start",
               "checked":true,
               "type":"text"
             },
-            "hz9-3Q":{
+            "prop28":{
               "col":"ownership_end",
               "checked":true,
               "type":"text"
@@ -489,36 +494,36 @@ interface Schema {
           },
           "error":{
             
-          },
-          "table":"bzZjuR",
-          "name":"owns",
-          "reversed":true,
-          "source":"person_id",
-          "target":"property_id"
+          }
         },
         "SzQg4i":{
+          "name":"lives_in",
+          "reversed":true,
+          "source":"person_id",
+          "target":"property_id",
+          "table":"VyAbP2",
           "properties":{
-            "lvsIzb":{
+            "prop29":{
               "col":"livesin_id",
               "checked":true,
               "type":"text"
             },
-            "2II7no":{
+            "prop30":{
               "col":"person_id",
               "checked":true,
               "type":"text"
             },
-            "9DU13K":{
+            "prop31":{
               "col":"property_id",
               "checked":true,
               "type":"text"
             },
-            "HwQbl1":{
+            "prop32":{
               "col":"move_in_date",
               "checked":true,
               "type":"text"
             },
-            "urXS5h":{
+            "prop33":{
               "col":"move_out_date",
               "checked":true,
               "type":"text"
@@ -526,12 +531,7 @@ interface Schema {
           },
           "error":{
             
-          },
-          "table":"VyAbP2",
-          "name":"lives_in",
-          "reversed":true,
-          "source":"person_id",
-          "target":"property_id"
+          }
         }
       }
     },
@@ -542,18 +542,22 @@ interface Schema {
       "target":"wSCtEM",
       "data":{
         "lrNk0-":{
+          "name":"found_in",
+          "source":"property_id",
+          "target":"neighborhood_id",
+          "table":"FxP9qO",
           "properties":{
-            "J8oH3c":{
+            "prop34":{
               "col":"inneighborhood_id",
               "checked":true,
               "type":"text"
             },
-            "Xqt-8w":{
+            "prop35":{
               "col":"property_id",
               "checked":true,
               "type":"text"
             },
-            "J4M3xc":{
+            "prop36":{
               "col":"neighborhood_id",
               "checked":true,
               "type":"text"
@@ -561,11 +565,7 @@ interface Schema {
           },
           "error":{
             
-          },
-          "table":"FxP9qO",
-          "name":"found_in",
-          "source":"property_id",
-          "target":"neighborhood_id"
+          }
         }
       }
     },
@@ -576,23 +576,27 @@ interface Schema {
       "target":"mCZlJk",
       "data":{
         "VtIig5":{
+          "name":"knows",
+          "source":"person_id_1",
+          "target":"person_id_2",
+          "table":"IiiTaI",
           "properties":{
-            "e3ypqw":{
+            "prop37":{
               "col":"knows_id",
               "checked":true,
               "type":"text"
             },
-            "ZSqHhH":{
+            "prop38":{
               "col":"person_id_1",
               "checked":true,
               "type":"text"
             },
-            "ezEcpK":{
+            "prop39":{
               "col":"person_id_2",
               "checked":true,
               "type":"text"
             },
-            "ast6eH":{
+            "prop40":{
               "col":"relationship",
               "checked":true,
               "type":"text"
@@ -600,11 +604,7 @@ interface Schema {
           },
           "error":{
             
-          },
-          "table":"IiiTaI",
-          "name":"knows",
-          "source":"person_id_1",
-          "target":"person_id_2"
+          }
         }
       }
     }
