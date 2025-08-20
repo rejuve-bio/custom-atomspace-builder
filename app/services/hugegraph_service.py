@@ -82,10 +82,14 @@ class HugeGraphService:
         for vertex in schema_data.get("vertex_labels", []):
             if "id" in vertex.get("properties", []):
                 vertex["properties"].remove("id")
+            if "id" in vertex.get("nullable_keys", []):
+                vertex["nullable_keys"].remove("id")
         
         for edge in schema_data.get("edge_labels", []):
             if "id" in edge.get("properties", []):
                 edge["properties"].remove("id")
+            if "id" in edge.get("nullable_keys", []):
+                edge["nullable_keys"].remove("id")
                 
         return schema_data
 
