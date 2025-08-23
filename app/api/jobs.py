@@ -141,17 +141,17 @@ async def load_data(
         response.message = success_message
         
         # Cleanup based on source
-        if files_source == "session":
-            session_manager.consume_session(session_id)
-            session_manager.cleanup_session(session_id)
-        else:
-            import shutil
-            if os.path.exists(temp_dir):
-                try:
-                    shutil.rmtree(temp_dir)
-                    print(f"Cleaned up temporary directory: {temp_dir}")
-                except Exception as e:
-                    print(f"Warning: Could not delete temporary directory {temp_dir}: {e}")
+        # if files_source == "session":
+        #     session_manager.consume_session(session_id)
+        #     session_manager.cleanup_session(session_id)
+        # else:
+        #     import shutil
+        #     if os.path.exists(temp_dir):
+        #         try:
+        #             shutil.rmtree(temp_dir)
+        #             print(f"Cleaned up temporary directory: {temp_dir}")
+        #         except Exception as e:
+        #             print(f"Warning: Could not delete temporary directory {temp_dir}: {e}")
         
         return response
         
