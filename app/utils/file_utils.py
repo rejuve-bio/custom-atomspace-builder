@@ -1,12 +1,16 @@
 """File operations utilities."""
 
+import csv
 import os
 import json
 import shutil
+import uuid
 import zipfile
 import io
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 from pathlib import Path
+
+from app.models.schemas import DataSource, FileInfo
 
 
 def copy_files_to_temp_dir(source_dir: str, temp_dir: str) -> Dict[str, str]:
@@ -131,3 +135,211 @@ def get_latest_directory(base_dir: str) -> str:
     
     job_dirs.sort(key=os.path.getmtime, reverse=True)
     return job_dirs[0]
+
+def is_csv_file(filename: str) -> bool:
+    """Check if file is a CSV based on extension."""
+    return filename.lower().endswith('.csv')
+
+
+def detect_csv_delimiter(file_path: str, sample_size: int = 1024) -> str:
+    """Detect CSV delimiter by analyzing a sample of the file."""
+    delimiters = [',', ';', '\t', '|', ':']
+    
+    try:
+        with open(file_path, 'r', encoding='utf-8', errors='ignore') as file:
+            sample = file.read(sample_size)
+        
+        # Count occurrences of each delimiter
+        delimiter_counts = {}
+        for delimiter in delimiters:
+            delimiter_counts[delimiter] = sample.count(delimiter)
+        
+        # Return the delimiter with the highest count (minimum 2 occurrences)
+        best_delimiter = max(delimiter_counts, key=delimiter_counts.get)
+        return best_delimiter if delimiter_counts[best_delimiter] >= 2 else ','
+        
+    except Exception as e:
+        print(f"Error detecting delimiter for {file_path}: {str(e)}")
+        return ','
+
+def detect_encoding(file_path: str, sample_size: int = 8192) -> str:
+    """Detect file encoding."""
+    encodings_to_try = ['utf-8', 'utf-8-sig', 'latin1', 'cp1252', 'iso-8859-1']
+    
+    for encoding in encodings_to_try:
+        try:
+            with open(file_path, 'r', encoding=encoding) as file:
+                file.read(sample_size)
+            return encoding
+        except UnicodeDecodeError:
+            continue
+    
+    # Fallback to utf-8 with error handling
+    return 'utf-8'
+
+
+def validate_csv_structure(file_path: str, delimiter: str = None) -> Dict[str, Any]:
+    """Validate CSV file structure and return metadata."""
+    if delimiter is None:
+        delimiter = detect_csv_delimiter(file_path)
+    
+    encoding = detect_encoding(file_path)
+    
+    metadata = {
+        "is_valid": False,
+        "delimiter": delimiter,
+        "encoding": encoding,
+        "row_count": 0,
+        "column_count": 0,
+        "has_header": False,
+        "errors": []
+    }
+    
+    try:
+        with open(file_path, 'r', encoding=encoding, errors='replace') as file:
+            csv_reader = csv.reader(file, delimiter=delimiter)
+            
+            rows = list(csv_reader)
+            
+            if not rows:
+                metadata["errors"].append("File is empty")
+                return metadata
+            
+            metadata["row_count"] = len(rows)
+            metadata["column_count"] = len(rows[0]) if rows else 0
+            
+            # Simple heuristic to detect header
+            if len(rows) >= 2:
+                first_row = rows[0]
+                second_row = rows[1]
+                
+                # Check if first row looks like headers (non-numeric strings)
+                header_score = 0
+                for cell in first_row:
+                    if cell and not cell.replace('.', '').replace('-', '').isdigit():
+                        header_score += 1
+                
+                metadata["has_header"] = header_score > len(first_row) * 0.5
+            
+            metadata["is_valid"] = True
+            
+    except Exception as e:
+        metadata["errors"].append(str(e))
+    
+    return metadata
+
+def get_file_type(filename: str) -> str:
+    """Get MIME type based on file extension."""
+    extension = filename.lower().split('.')[-1] if '.' in filename else ''
+    
+    type_mapping = {
+        'csv': 'text/csv',
+        'json': 'application/json',
+        'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'xls': 'application/vnd.ms-excel',
+        'xlsm': 'application/vnd.ms-excel.sheet.macroEnabled.12',
+        'xlsb': 'application/vnd.ms-excel.sheet.binary.macroEnabled.12',
+        'txt': 'text/plain',
+        'tsv': 'text/tab-separated-values'
+    }
+    
+    return type_mapping.get(extension, 'application/octet-stream')
+
+
+def create_error_datasource(filename: str, error_message: str) -> DataSource:
+    """Create an error datasource for files that couldn't be processed."""
+    return DataSource(
+        id=f"ds_error_{uuid.uuid4().hex[:8]}",
+        file=FileInfo(
+            name=filename,
+            size=0,
+            type=get_file_type(filename)
+        ),
+        columns=["error"],
+        sampleRow=[error_message]
+    )
+
+def clean_column_names(columns: List[str]) -> List[str]:
+    """Clean and standardize column names."""
+    cleaned = []
+    for col in columns:
+        clean_col = str(col).strip()
+        
+        # Handle empty or None columns
+        if not clean_col or clean_col.lower() in ['none', 'null', '']:
+            clean_col = f"column_{len(cleaned) + 1}"
+        
+        cleaned.append(clean_col)
+    
+    return cleaned
+
+
+def clean_sample_row(row: List[str], expected_length: int) -> List[str]:
+    """Clean and standardize sample row data."""
+    cleaned = []
+    for i, cell in enumerate(row):
+        if i >= expected_length:
+            break
+        
+        # Convert to string and strip whitespace
+        clean_cell = str(cell).strip() if cell is not None else ""
+        cleaned.append(clean_cell)
+    
+    # Pad with empty strings if row is shorter than expected
+    while len(cleaned) < expected_length:
+        cleaned.append("")
+    
+    return cleaned
+
+def preprocess_csv_file(file_path: str, filename: str) -> Optional[DataSource]:
+    """Preprocess a CSV file to extract columns and sample row."""
+    try:
+        # Get file stats
+        file_stats = os.stat(file_path)
+        file_size = file_stats.st_size
+        
+        # Validate and get metadata
+        csv_metadata = validate_csv_structure(file_path)
+        
+        if not csv_metadata["is_valid"]:
+            print(f"Invalid CSV file {filename}: {csv_metadata['errors']}")
+            return create_error_datasource(filename, "Invalid CSV structure")
+        
+        delimiter = csv_metadata["delimiter"]
+        encoding = csv_metadata["encoding"]
+        
+        with open(file_path, 'r', encoding=encoding, errors='replace') as file:
+            csv_reader = csv.reader(file, delimiter=delimiter)
+            
+            # Get headers (first row)
+            try:
+                raw_columns = next(csv_reader)
+                columns = clean_column_names(raw_columns)
+            except StopIteration:
+                return create_error_datasource(filename, "Empty file")
+            
+            # Get sample row (second row)
+            try:
+                raw_sample_row = next(csv_reader)
+                sample_row = clean_sample_row(raw_sample_row, len(columns))
+            except StopIteration:
+                # Only header row exists, create empty sample
+                sample_row = [""] * len(columns)
+        
+        # Generate unique ID for this data source
+        ds_id = f"ds_{uuid.uuid4().hex[:8]}"
+        
+        return DataSource(
+            id=ds_id,
+            file=FileInfo(
+                name=filename,
+                size=file_size,
+                type=get_file_type(filename)
+            ),
+            columns=columns,
+            sampleRow=sample_row
+        )
+        
+    except Exception as e:
+        print(f"Error preprocessing CSV file {filename}: {str(e)}")
+        return create_error_datasource(filename, f"Processing error: {str(e)}")

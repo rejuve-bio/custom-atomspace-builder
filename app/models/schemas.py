@@ -74,14 +74,25 @@ class UploadResponse(BaseModel):
     total_files: int
     files_in_session: List[str]
 
+class FileInfo(BaseModel):
+    name: str
+    size: int
+    type: str
+
+class DataSource(BaseModel):
+    id: str
+    file: FileInfo
+    columns: List[str]
+    sampleRow: List[str]
+
 
 class SessionStatusResponse(BaseModel):
     session_id: str
     status: str
     expires_at: str
-    files: List[Dict[str, Any]]
+    files: List[UploadFileInfo]  # Original file info
     total_files: int
-
+    datasources: List[DataSource]  # New preprocessed data sources
 
 class CreateSessionResponse(BaseModel):
     session_id: str

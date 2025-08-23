@@ -15,7 +15,7 @@ class AnnotationService:
     async def notify_annotation_service(self, job_id: str, writer_type: str) -> Optional[str]:
         """Notify the annotation service about a new job."""
         if not self.service_url:
-            print("Warning: Annotation service URL not configured")
+            print("Error: ANNOTATION_SERVICE_URL not configured")
             raise RuntimeError("Annotation service URL is not set")
         if writer_type == "neo4j":
             writer_type = "cypher"
@@ -32,18 +32,18 @@ class AnnotationService:
                 
                 if response.status_code != 200:
                     error_msg = f"Annotation service returned {response.status_code}: {response.text}"
-                    print(f"Warning: {error_msg}")
-                    return error_msg
+                    print(f"Error connecting to the Annotation: {error_msg}")
+                    raise RuntimeError(error_msg)
                     
-        except httpx.TimeoutException:
+        except httpx.TimeoutException as e:
             error_msg = "Timeout connecting to annotation service"
-            print(f"Warning: {error_msg}")
-            return error_msg
+            print(f"Error connecting to the Annotation: {error_msg}: {str(e)}")
+            raise RuntimeError(error_msg)
             
         except Exception as e:
             error_msg = f"Failed to connect to annotation service: {str(e)}"
-            print(f"Warning: {error_msg}")
-            return error_msg
+            print(f"Error connecting to the Annotation: {error_msg}")
+            raise RuntimeError(error_msg)
         
         return None
 
