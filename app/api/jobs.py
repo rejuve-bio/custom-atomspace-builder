@@ -93,9 +93,6 @@ async def load_data(
                 print(f"Saved {len(uploaded_files)} files to temporary directory: {temp_dir}")
                 
             except Exception as e:
-                # Cleanup temp directory on error
-                import shutil
-                shutil.rmtree(temp_dir, ignore_errors=True)
                 raise HTTPException(status_code=500, detail=f"Failed to save uploaded files: {str(e)}")
         
         # Process data using HugeGraph service
@@ -128,9 +125,6 @@ async def load_data(
             if selected_job_id:
                 await annotation_service.notify_annotation_service(selected_job_id, writer_type)
             
-            # Cleanup failed job
-            if os.path.exists(output_dir):
-                shutil.rmtree(output_dir, ignore_errors=True)
             raise HTTPException(status_code=500, detail={"message": error_msg, "job_id": job_id})
         
         # Generate and save graph info
@@ -152,22 +146,19 @@ async def load_data(
             session_manager.cleanup_session(session_id)
         else:
             import shutil
-            shutil.rmtree(temp_dir, ignore_errors=True)
-            print(f"Cleaned up temporary directory: {temp_dir}")
+            if os.path.exists(temp_dir):
+                try:
+                    shutil.rmtree(temp_dir)
+                    print(f"Cleaned up temporary directory: {temp_dir}")
+                except Exception as e:
+                    print(f"Warning: Could not delete temporary directory {temp_dir}: {e}")
         
         return response
         
     except json.JSONDecodeError as e:
-        # Cleanup temp directory if it was created
-        if 'temp_dir' in locals() and files_source == "direct":
-            import shutil
-            shutil.rmtree(temp_dir, ignore_errors=True)
         raise HTTPException(status_code=400, detail=f"Invalid JSON: {str(e)}")
+    
     except Exception as e:
-        # Cleanup temp directory if it was created
-        if 'temp_dir' in locals() and files_source == "direct":
-            import shutil
-            shutil.rmtree(temp_dir, ignore_errors=True)
         raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
 
 @router.post("/suggest-schema")
