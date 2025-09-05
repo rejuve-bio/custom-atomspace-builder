@@ -26,8 +26,6 @@ services:
       - atomspace_logs:/app/logs
       - shared_output:/shared/output
     depends_on:
-      neo4j:
-        condition: service_healthy
       hugegraph:
         condition: service_started
     networks:
@@ -61,11 +59,6 @@ services:
     networks:
       - atomspace-network
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "cypher-shell", "-u", "${NEO4J_USERNAME}", "-p", "${NEO4J_PASSWORD}", "RETURN 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
 
   hugegraph:

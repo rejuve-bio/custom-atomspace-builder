@@ -47,6 +47,16 @@ up:
 up-api:
 	docker-compose -f $(COMPOSE_FILE) up -d --no-deps --build $(SERVICE)
 
+# Build and start all services EXCEPT Neo4j
+up-no-neo4j:
+	@echo "Starting all services except Neo4j..."
+	docker-compose -f $(COMPOSE_FILE) up -d --build hugegraph $(SERVICE)
+
+# Build and start neo4j only
+up-neo4j:
+	@echo "Starting only Neo4j service..."
+	docker-compose -f $(COMPOSE_FILE) up -d --build neo4j
+	
 # Stop all containers
 down:
 	docker-compose -f $(COMPOSE_FILE) down
