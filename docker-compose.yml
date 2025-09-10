@@ -1,8 +1,6 @@
 services:
   atomspace-api:
-    build: 
-      context: .
-      dockerfile: ${DOCKERFILE:-Dockerfile}
+    image: abdum1964/atomspace-api:latest
     container_name: atomspace-api
     ports:
       - "${API_PORT:-8000}:${API_PORT:-8000}"
