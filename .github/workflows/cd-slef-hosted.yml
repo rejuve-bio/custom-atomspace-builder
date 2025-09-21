@@ -1,5 +1,19 @@
- # CD 
-    deploy:
+name: CD pipeline
+
+on:
+  push:
+    branches:
+      - master
+      - develop
+      - 'feature/*'
+  pull_request:
+    branches:
+      - master
+      - develop
+      - 'feature/*'
+
+jobs:
+  deploy:
     runs-on: self-hosted
     needs: build
     steps:
