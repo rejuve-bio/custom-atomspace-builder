@@ -1,0 +1,55 @@
+ # CD 
+    deploy:
+    runs-on: self-hosted
+    needs: build
+    steps:
+      - name: Checkout current repository
+        uses: actions/checkout@v4
+          
+      - name: Test SSH connectivity
+        run: |
+          echo "Current user: $(whoami)"
+          echo "Network interfaces:"
+          ip addr show | grep -E "(tailscale0|100\.67\.47\.42)"
+          
+          echo "Testing Tailscale IP connectivity..."
+          ping -c 2 100.67.47.42 || echo "Ping failed"
+          
+          echo "Testing SSH port..."
+          timeout 5 bash -c 'echo >/dev/tcp/100.67.47.42/22' && echo "Port 22 reachable" || echo "Port 22 not reachable"
+
+      - name: Set up SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo '${{ secrets.ANSIBLE_SSH_KEY }}' | base64 -d > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          
+      - name: Checkout Ansible repository
+        uses: actions/checkout@v4
+        with:
+          repository: Abdu1964/ansible-deploy_v2.0
+          path: ansible-deploy_v2.0
+          
+      - name: Create dynamic inventory
+        run: |
+          cd ansible-deploy_v2.0
+          mkdir -p inventory
+          cat > inventory/hosts.ini <<EOL
+          [Custom_Atomspace_builder_Remote]
+          localhost ansible_connection=local ansible_become=true
+          EOL
+          echo "Inventory created:"
+          cat inventory/hosts.ini
+          
+      - name: Deploy with Ansible
+        run: |
+          cd ansible-deploy_v2.0
+          echo "Repository contents:"
+          ls -la
+          echo "Checking for playbooks:"
+          find . -name "*.yml" -o -name "*.yaml" | head -10
+          
+          ansible-playbook -i inventory/hosts.ini playbooks/deploy_server.yml \
+            --tags "Custom_Atomspace_builder_Remote" \
+            -e docker_image=${{ env.DOCKER_HUB_USERNAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
+            -v
