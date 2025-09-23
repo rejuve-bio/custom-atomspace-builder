@@ -1,4 +1,4 @@
-name: CD pipeline
+name: CD pipeline for the custom-atomspace-builder
 
 on:
   push:
@@ -15,7 +15,6 @@ on:
 jobs:
   deploy:
     runs-on: self-hosted
-    needs: build
     steps:
       - name: Checkout current repository
         uses: actions/checkout@v4
@@ -65,5 +64,5 @@ jobs:
           
           ansible-playbook -i inventory/hosts.ini playbooks/deploy_server.yml \
             --tags "Custom_Atomspace_builder_Remote" \
-            -e docker_image=${{ env.DOCKER_HUB_USERNAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
+            -e ansible_become_password='${{ secrets.SUDO_PASSWORD }}' \
             -v
