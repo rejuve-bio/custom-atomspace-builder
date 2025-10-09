@@ -2,6 +2,10 @@
 
 The Custom AtomSpace Builder is a comprehensive graph processing system that transforms structured tabular data into multiple knowledge graph formats including MeTTa-formatted graphs, Neo4j-compatible formats, and MORK database integration. Built on Apache HugeGraph Loader with custom modifications, it provides a complete pipeline for data ingestion, schema transformation, and graph generation with support for multiple output formats and backend integrations.
 
+## System Flow
+
+![System Flow Diagram](./docs/system_flow.png)
+
 ## Overview
 
 This project provides a flexible graph data loading and transformation pipeline with:
