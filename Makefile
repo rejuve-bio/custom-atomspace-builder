@@ -20,6 +20,8 @@ help:
 	@echo "  make up-dev	  - Build and start all services in development mode"
 	@echo "  make up-api      - Build and start only $(SERVICE) without restarting dependencies"
 	@echo "  make up-api-dev  - Build and start only $(SERVICE_DEV) in development mode without restarting dependencies"
+	@echo "  make up-no-neo4j - Build and start all services except Neo4j"
+	@echo "  make up-neo4j    - Build and start only the Neo4j service"
 	@echo "  make down        - Stop all running containers"
 	@echo "  make down-dev    - Stop all running containers in development mode"
 	@echo "  make logs        - View logs for $(SERVICE)"
