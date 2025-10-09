@@ -1,21 +1,3 @@
-<!-- 
-  Thank you very much for contributing to Apache HugeGraph, we are happy that you want to help us improve it!
-
-  Here are some tips for you:
-    1. If this is your first time, please read the [contributing guidelines](https://github.com/apache/hugegraph/blob/master/CONTRIBUTING.md)
-
-    2. If a PR fix/close an issue, type the message "close xxx" (xxx is the link of related 
-issue) in the content, GitHub will auto link it (Required)
-
-    3. Name the PR title in "Google Commit Format", start with "feat | fix | perf | refactor | doc | chore", 
-      such like: "feat(core): support the PageRank algorithm" or "fix: wrong break in the compute loop" (module is optional)
-      skip it if you are unsure about which is the best component.
-
-    4. One PR address one issue, better not to mix up multiple issues.
-
-    5. Put an `x` in the `[ ]` to mark the item as CHECKED. `[x]` (or click it directly after 
-published)
--->
 
 ## Purpose of the PR
 
