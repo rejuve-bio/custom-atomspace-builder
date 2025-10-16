@@ -256,7 +256,7 @@ make build
 make build-dev
 
 # Traditional method
-docker compose -f docker-compose.dev.yml up -d
+docker-compose -f docker-compose.dev.yml up -d
 ```
 
 ### Service URLs and Access
