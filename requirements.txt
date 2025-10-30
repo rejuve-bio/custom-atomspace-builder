@@ -6,3 +6,4 @@ httpx
 python-dotenv
 PyYAML
 neo4j
+pyjwt
