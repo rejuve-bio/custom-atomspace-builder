@@ -3,7 +3,7 @@
 import json
 import os
 import shutil
-from fastapi import APIRouter, Form, HTTPException, File, UploadFile
+from fastapi import APIRouter, Form, HTTPException, File, UploadFile, BackgroundTasks
 from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
 from typing import List
 from ..core.session_manager import session_manager
@@ -12,14 +12,14 @@ from ..services.neo4j_service import neo4j_service
 from ..services.annotation_service import annotation_service
 from ..services.graph_info_service import graph_info_service
 from ..services.schema_suggestion_service import schema_suggestion_service
+from ..services.webhook_service import webhook_service
 from ..models.schemas import (
     HugeGraphLoadResponse, 
     JobSelectionRequest,
     DeleteJobResponse,
     HistoryResponse,
     SchemaConversionResponse,
-    SuggestSchemaRequest,
-    SuggestSchemaResponse
+    SuggestSchemaRequest
 )
 from ..models.enums import WriterType
 from ..utils.file_utils import get_output_files, create_zip_file
@@ -35,7 +35,9 @@ async def load_data(
     schema_json: str = Form(...),
     writer_type: str = Form("metta"),
     session_id: str = Form(None),  # Made optional
-    files: List[UploadFile] = File(None)  # Made optional
+    files: List[UploadFile] = File(None),  # Made optional
+    webhook_url: str = Form(None),
+    background_tasks: BackgroundTasks = None
 ):
     """Submit processing job using either uploaded files from session OR direct file upload."""
     
@@ -56,6 +58,12 @@ async def load_data(
         config_data = json.loads(config)
         schema_data = json.loads(schema_json)
         
+        if webhook_url:
+            background_tasks.add_task(
+                webhook_service.send_started, 
+                webhook_url
+            )
+
         # Handle session-based upload
         if session_id:
             session = session_manager.get_session(session_id)
@@ -93,8 +101,21 @@ async def load_data(
                 print(f"Saved {len(uploaded_files)} files to temporary directory: {temp_dir}")
                 
             except Exception as e:
+                if webhook_url:
+                    background_tasks.add_task(
+                        webhook_service.send_failed, 
+                        webhook_url,
+                        "failed",
+                        f"Failed to save uploaded files: {str(e)}"
+                    )
                 raise HTTPException(status_code=500, detail=f"Failed to save uploaded files: {str(e)}")
         
+        if webhook_url:
+            background_tasks.add_task(
+                webhook_service.send_processing, 
+                webhook_url
+            )
+
         # Process data using HugeGraph service
         response = await hugegraph_service.process_data(
             files_dir=files_dir,
@@ -152,10 +173,22 @@ async def load_data(
         #             print(f"Cleaned up temporary directory: {temp_dir}")
         #         except Exception as e:
         #             print(f"Warning: Could not delete temporary directory {temp_dir}: {e}")
-        
+        if webhook_url:
+            background_tasks.add_task(
+                webhook_service.send_completed, 
+                webhook_url,
+                job_id,
+                response.message
+            )
         return response
         
     except json.JSONDecodeError as e:
+        if webhook_url:
+            background_tasks.add_task(
+                webhook_service.send_failed, 
+                webhook_url,
+                error=str(e)
+            )
         raise HTTPException(status_code=400, detail=f"Invalid JSON: {str(e)}")
     
     except Exception as e:
