@@ -31,6 +31,7 @@ import org.apache.hugegraph.loader.mapping.InputStruct;
 import org.apache.hugegraph.loader.metrics.LoadMetrics;
 import org.apache.hugegraph.loader.metrics.LoadSummary;
 import org.apache.hugegraph.loader.writer.MeTTaWriter;
+import org.apache.hugegraph.loader.writer.NetworkXWriter;
 import org.apache.hugegraph.loader.writer.Neo4jCSVWriter;
 import org.apache.hugegraph.loader.writer.Writer;
 import org.apache.hugegraph.structure.GraphElement;
@@ -75,17 +76,20 @@ public abstract class InsertTask implements Runnable {
         this.jobId = this.context.options().jobId;
         this.writerType = this.context.options().writerType;
 
-        if (!this.writerType.equals("metta") &&
-            !this.writerType.equals("neo4j") &&
-            !this.writerType.equals("mork")) {
-            throw new IllegalArgumentException(
-                "Unsupported writer type: " + this.writerType);
+        if (!this.writerType.equals("metta") &&  
+            !this.writerType.equals("neo4j") &&  
+            !this.writerType.equals("mork") &&  
+            !this.writerType.equals("networkx")) {  
+            throw new IllegalArgumentException(  
+                "Unsupported writer type: " + this.writerType);  
         }
 
-        if (this.writerType.equals("metta") || this.writerType.equals("mork")) {
-            this.writer = new MeTTaWriter(this.outputDir, this.writerType);
-        } else if (this.writerType.equals("neo4j")) {
-            this.writer = new Neo4jCSVWriter(this.outputDir, this.jobId);
+        if (this.writerType.equals("metta") || this.writerType.equals("mork")) {  
+            this.writer = new MeTTaWriter(this.outputDir, this.writerType);  
+        } else if (this.writerType.equals("neo4j")) {  
+            this.writer = new Neo4jCSVWriter(this.outputDir, this.jobId);  
+        } else if (this.writerType.equals("networkx")) {  
+            this.writer = new NetworkXWriter(this.outputDir, this.jobId);  
         }
     }
 
@@ -141,6 +145,15 @@ public abstract class InsertTask implements Runnable {
                                     // checkVertex);
             this.writer.writeEdges(batch);
         }
+    }
+    protected void finalizeWriter() {  
+        if (this.writerType.equals("networkx")) {  
+            try {  
+                ((NetworkXWriter) this.writer).writeGraph();  
+            } catch (Exception e) {  
+                throw new RuntimeException("Failed to finalize NetworkX writer", e);  
+            }  
+        }  
     }
 
     @SuppressWarnings("unchecked")

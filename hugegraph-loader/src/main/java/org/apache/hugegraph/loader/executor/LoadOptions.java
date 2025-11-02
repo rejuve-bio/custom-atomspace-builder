@@ -61,9 +61,9 @@ public class LoadOptions implements Serializable {
                description = "The path of the output directory")
     public String output;
 
-    @Parameter(names = {"-w", "--writer-type"}, arity = 1,
-               description = "Choose the writer type, " +
-                             "allowed values are: metta or neo4j")
+    @Parameter(names = {"-w", "--writer-type"}, arity = 1,  
+           description = "Choose the writer type, " +  
+                         "allowed values are: metta, neo4j, or networkx")  
     public String writerType = "metta";
 
     @Parameter(names = {"--job-id"}, arity = 1,
