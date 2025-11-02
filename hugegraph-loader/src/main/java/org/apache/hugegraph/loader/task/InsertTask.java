@@ -91,6 +91,9 @@ public abstract class InsertTask implements Runnable {
         } else if (this.writerType.equals("networkx")) {  
             this.writer = new NetworkXWriter(this.outputDir, this.jobId);  
         }
+        
+        this.context.setWriter(this.writer);  
+
     }
 
     public ElemType type() {

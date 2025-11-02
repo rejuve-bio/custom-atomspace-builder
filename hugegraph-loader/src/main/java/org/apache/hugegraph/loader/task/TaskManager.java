@@ -36,6 +36,7 @@ import org.apache.hugegraph.loader.mapping.ElementMapping;
 import org.apache.hugegraph.loader.mapping.InputStruct;
 import org.apache.hugegraph.loader.metrics.LoadSummary;
 import org.apache.hugegraph.util.ExecutorUtil;
+import org.apache.hugegraph.loader.writer.NetworkXWriter;
 import org.apache.hugegraph.util.Log;
 
 public final class TaskManager {
@@ -104,6 +105,20 @@ public final class TaskManager {
             this.singleSemaphore.release(this.singleSemaphoreNum());
         }
         LOG.info("All the {} finished", tasksName);
+        // Finalize NetworkX writer after all tasks complete  
+
+    if (this.context.options().writerType.equals("networkx")) {  
+        LOG.info("Finalizing NetworkX writer...");  
+        try {  
+            // Get the writer from context and finalize it  
+            if (this.context.writer() != null) {  
+                ((NetworkXWriter) this.context.writer()).writeGraph();  
+            }  
+        } catch (Exception e) {  
+            LOG.error("Failed to finalize NetworkX writer", e);  
+            throw new RuntimeException("Failed to finalize NetworkX writer", e);  
+        }  
+    }
     }
 
     public void shutdown() {
