@@ -43,6 +43,7 @@ class HugeGraphService:
                 
                 # Prepare output directory
                 output_dir = self._get_job_output_dir(job_id)
+                os.makedirs(output_dir, exist_ok=True)
                 
                 # Run HugeGraph loader
                 result = self._run_hugegraph_loader(
