@@ -29,6 +29,12 @@ Include relationships from:
 - Medicine and health (disease, drug, biomarker, effect)
 - Experimental context (method, assay, result)
 
+Note:
+- Focus on factual or causal relationships, not just definitions or descriptions.
+- Use precise biological entities and domain-specific predicates.
+- Output ONLY the triples, no explanations.
+- Underscore multi-word entities and predicates with underscores (_).
+
 Each triple must follow:
 (subject predicate object)
 

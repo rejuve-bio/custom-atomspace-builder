@@ -1,3 +1,4 @@
+import argparse
 import os
 import re
 import time
@@ -316,3 +317,90 @@ class PaperProcessor:
             results[paper.title] = result
         
         return results
+    
+
+class CLI:
+    """Command-line interface"""
+    
+    @staticmethod
+    def main():
+        parser = argparse.ArgumentParser(
+            description="Bio Research Data Semantic FOL Parser",
+            formatter_class=argparse.RawDescriptionHelpFormatter,
+            epilog="""
+Examples:
+  python bio_paper_parser.py --topic "cancer immunotherapy"
+  python bio_paper_parser.py --topic "CRISPR gene editing" --max-papers 5
+  python bio_paper_parser.py --paper-title "AlphaFold: Protein structure prediction"
+            """
+        )
+        
+        parser.add_argument(
+            '--topic',
+            type=str,
+            help='Research topic to search for'
+        )
+        
+        parser.add_argument(
+            '--paper-title',
+            type=str,
+            help='Specific paper title to search for'
+        )
+        
+        parser.add_argument(
+            '--max-papers',
+            type=int,
+            default=3,
+            help='Maximum number of papers to process (default: 3)'
+        )
+        
+        parser.add_argument(
+            '--chunk-size',
+            type=int,
+            default=2000,
+            help='Text chunk size for processing (default: 2000)'
+        )
+        
+        parser.add_argument(
+            '--output-dir',
+            type=str,
+            default='./output',
+            help='Output directory for METTA files (default: ./output)'
+        )
+        
+        args = parser.parse_args()
+        
+        # Validate input
+        if not args.topic and not args.paper_title:
+            parser.print_help()
+            print("\nError: Please provide either --topic or --paper-title")
+            return
+        
+        query = args.topic or args.paper_title
+        
+        print("\n" + "="*60)
+        print("Bio Research FOL Parser")
+        print("="*60)
+        print(f"Query: {query}")
+        print(f"Max Papers: {args.max_papers}")
+        print("="*60 + "\n")
+        
+        processor = PaperProcessor()
+        processor.metta_writer.output_dir = Path(args.output_dir)
+        processor.metta_writer.output_dir.mkdir(exist_ok=True)
+        
+        results = processor.process_papers(query, args.max_papers)
+        
+        # Display results
+        print("\n" + "="*60)
+        print("RESULTS")
+        print("="*60 + "\n")
+        
+        for title, data in results.items():
+            print(f"📄 {title[:70]}")
+            print(f"   Triples: {data['count']}")
+            print(f"   METTA File: {data['metta_file']}")
+            print()
+
+if __name__ == "__main__":
+    CLI.main()
