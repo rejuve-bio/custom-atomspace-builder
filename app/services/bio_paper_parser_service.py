@@ -1,6 +1,11 @@
+import re
 from typing import List
+from pathlib import Path
 
 import arxiv
+import requests
+import PyPDF2
+
 from app.models.bio_parser import PaperInfo
 
 
@@ -43,3 +48,56 @@ class PaperFetcher:
         except Exception as e:
             self.logger(f"Error fetching papers: {e}")
             return []
+
+class PDFProcessor:
+    """Handles PDF download and text extraction"""
+    
+    def __init__(self, temp_dir: str = "./temp_pdfs"):
+        self.temp_dir = Path(temp_dir)
+        self.temp_dir.mkdir(exist_ok=True)
+        self.logger = lambda msg: print(f"[PDFProcessor] {msg}")
+    
+    def download_and_extract_text(self, pdf_url: str, paper_title: str) -> str:
+        """Download PDF and extract text content"""
+        try:
+            self.logger(f"Downloading PDF from {pdf_url[:50]}...")
+            
+            response = requests.get(pdf_url, timeout=30)
+            response.raise_for_status()
+            
+            # Save temporarily with sanitized filename
+            temp_file = self.temp_dir / f"{self._sanitize_filename(paper_title)}.pdf"
+            
+            with open(temp_file, 'wb') as f:
+                f.write(response.content)
+            
+            # Extract text
+            text = self._extract_text_from_pdf(temp_file)
+            
+            # Cleanup
+            temp_file.unlink()
+            
+            self.logger(f"Extracted {len(text)} characters")
+            return text
+            
+        except Exception as e:
+            self.logger(f"Error: {e}")
+            return ""
+    
+    @staticmethod
+    def _extract_text_from_pdf(pdf_path: Path) -> str:
+        """Extract text from PDF file"""
+        text = ""
+        with open(pdf_path, 'rb') as f:
+            pdf_reader = PyPDF2.PdfReader(f)
+            for page_num, page in enumerate(pdf_reader.pages):
+                try:
+                    text += page.extract_text() + "\n"
+                except Exception as e:
+                    print(f"Warning: Could not extract page {page_num}")
+        return text
+    
+    @staticmethod
+    def _sanitize_filename(filename: str) -> str:
+        """Sanitize filename for file system"""
+        return re.sub(r'[^\w\s-]', '', filename)[:50]
