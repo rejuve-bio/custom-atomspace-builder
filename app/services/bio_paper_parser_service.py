@@ -1,3 +1,4 @@
+from datetime import datetime
 import os
 import re
 from typing import List, Optional
@@ -183,3 +184,63 @@ class FOLExtractor:
                 subject, predicate, obj = match.groups()
                 triples.append(FOLTriple(subject.strip(), predicate.strip(), obj.strip()))
         return triples
+    
+
+class METTAWriter:
+    """Handles METTA file generation"""
+    
+    def __init__(self, output_dir: str = "./output"):
+        self.output_dir = Path(output_dir)
+        self.output_dir.mkdir(exist_ok=True)
+        self.logger = lambda msg: print(f"[METTAWriter] {msg}")
+    
+    def write_metta(self, title: str, triples: List[FOLTriple], 
+                    paper_info: PaperInfo) -> str:
+        """Write FOL triples to METTA file"""
+        try:
+            # Sanitize filename
+            safe_title = re.sub(r'[^\w\s-]', '', title)[:50]
+            filename = f"{safe_title}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.metta"
+            filepath = self.output_dir / filename
+            
+            with open(filepath, 'w') as f:
+                # Header with metadata
+                f.write(self._generate_header(title, paper_info, len(triples)))
+                f.write("\n\n")
+                
+                # Define schema
+                f.write(self._generate_schema())
+                f.write("\n\n")
+                
+                # Write triples
+                f.write("; Research findings\n")
+                for triple in triples:
+                    f.write(f"{triple.to_metta()}\n")
+            
+            self.logger(f"Wrote {len(triples)} triples to {filepath}")
+            return str(filepath)
+            
+        except Exception as e:
+            self.logger(f"Error writing METTA file: {e}")
+            return ""
+    
+    @staticmethod
+    def _generate_header(title: str, paper_info: PaperInfo, 
+                        triple_count: int) -> str:
+        """Generate METTA file header"""
+        return f"""; Semantic FOL Representation
+; Paper: {title}
+; Authors: {', '.join(paper_info.authors[:3])}
+; Published: {paper_info.published}
+; Total Triples: {triple_count}
+; Generated: {datetime.now().isoformat()}"""
+    
+    @staticmethod
+    def _generate_schema() -> str:
+        """Generate METTA schema definitions"""
+        return """; Schema definitions
+; (predicate subject object)
+; Core predicates used in this representation
+(: subject-property (-> Symbol))
+(: predicate-property (-> Symbol))
+(: object-property (-> Symbol))"""
