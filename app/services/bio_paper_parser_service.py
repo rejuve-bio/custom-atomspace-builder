@@ -1,12 +1,16 @@
+import os
 import re
-from typing import List
+from typing import List, Optional
 from pathlib import Path
+
+from app.prompts.bio_paper_parser_prompts import build_prompt, get_system_prompt
+from app.models.bio_parser import FOLTriple, PaperInfo
 
 import arxiv
 import requests
 import PyPDF2
+import openai
 
-from app.models.bio_parser import PaperInfo
 
 
 class PaperFetcher:
@@ -137,3 +141,45 @@ class TextProcessor:
         
         self.logger(f"Created {len(chunks)} text chunks")
         return chunks
+    
+
+class FOLExtractor:
+    """Handles FOL triple extraction using LLM with broad bio-domain focus"""
+
+    def __init__(self, api_key: Optional[str] = None):
+        self.client = openai.OpenAI(api_key=api_key or os.getenv('OPENAI_API_KEY'))
+        self.logger = lambda msg: print(f"[FOLExtractor] {msg}")
+
+    def extract_triples(self, text_chunk: str) -> List[FOLTriple]:
+        """Extract FOL triples from a text chunk"""
+        try:
+            prompt = build_prompt(text_chunk)
+
+            response = self.client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": get_system_prompt()},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=1400,
+                temperature=0.15
+            )
+
+            triples_text = response.choices[0].message.content.strip()
+            return self._parse_triples(triples_text)
+
+        except Exception as e:
+            self.logger(f"Error: {e}")
+            return []
+
+
+    def _parse_triples(self, triples_text: str) -> List[FOLTriple]:
+        """Parse extracted triples from LLM output"""
+        triples = []
+        for line in triples_text.split('\n'):
+            line = line.strip()
+            match = re.match(r'\(([^,\s]+)\s+([^,\s]+)\s+([^)]+)\)', line)
+            if match:
+                subject, predicate, obj = match.groups()
+                triples.append(FOLTriple(subject.strip(), predicate.strip(), obj.strip()))
+        return triples
