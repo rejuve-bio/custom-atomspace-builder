@@ -101,3 +101,39 @@ class PDFProcessor:
     def _sanitize_filename(filename: str) -> str:
         """Sanitize filename for file system"""
         return re.sub(r'[^\w\s-]', '', filename)[:50]
+
+
+class TextProcessor:
+    """Handles text preprocessing and chunking"""
+    
+    def __init__(self):
+        self.logger = lambda msg: print(f"[TextProcessor] {msg}")
+    
+    def preprocess_text(self, text: str) -> str:
+        """Clean and preprocess paper text"""
+        # Remove excessive whitespace
+        text = re.sub(r'\s+', ' ', text)
+        
+        # Remove special characters but keep basic punctuation
+        text = re.sub(r'[^\w\s.,;:!?()-]', '', text)
+        
+        # Fix hyphenated words
+        text = re.sub(r'(\w+)-\s+(\w+)', r'\1\2', text)
+        
+        return text.strip()
+    
+    def chunk_text(self, text: str, chunk_size: int = 2000, 
+                   overlap: int = 200) -> List[str]:
+        """Split text into overlapping chunks"""
+        words = text.split()
+        chunks = []
+        
+        for i in range(0, len(words), chunk_size - overlap):
+            chunk = ' '.join(words[i:i + chunk_size])
+            chunks.append(chunk)
+            
+            if i + chunk_size >= len(words):
+                break
+        
+        self.logger(f"Created {len(chunks)} text chunks")
+        return chunks
