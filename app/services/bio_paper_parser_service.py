@@ -1,8 +1,9 @@
-from datetime import datetime
 import os
 import re
-from typing import List, Optional
+import time
+from typing import Dict, List, Optional
 from pathlib import Path
+from datetime import datetime
 
 from app.prompts.bio_paper_parser_prompts import build_prompt, get_system_prompt
 from app.models.bio_parser import FOLTriple, PaperInfo
@@ -11,7 +12,9 @@ import arxiv
 import requests
 import PyPDF2
 import openai
+from dotenv import load_dotenv
 
+load_dotenv()
 
 
 class PaperFetcher:
@@ -244,3 +247,72 @@ class METTAWriter:
 (: subject-property (-> Symbol))
 (: predicate-property (-> Symbol))
 (: object-property (-> Symbol))"""
+
+
+class PaperProcessor:
+    """Orchestrates the complete processing pipeline"""
+    
+    def __init__(self, api_key: Optional[str] = None):
+        self.fetcher = PaperFetcher()
+        self.pdf_processor = PDFProcessor()
+        self.text_processor = TextProcessor()
+        self.fol_extractor = FOLExtractor(api_key)
+        self.metta_writer = METTAWriter()
+        self.logger = lambda msg: print(f"[PaperProcessor] {msg}")
+    
+    def process_paper(self, paper_info: PaperInfo, 
+                     chunk_size: int = 2000) -> Dict:
+        """Process single paper to FOL triples"""
+        self.logger(f"Processing: {paper_info.title[:60]}...")
+        
+        # Extract text
+        full_text = self.pdf_processor.download_and_extract_text(
+            paper_info.pdf_url, paper_info.title
+        )
+        
+        if not full_text:
+            self.logger("No text extracted, using summary")
+            full_text = paper_info.summary
+        
+        # Preprocess
+        clean_text = self.text_processor.preprocess_text(full_text)
+        
+        # Chunk
+        chunks = self.text_processor.chunk_text(clean_text, chunk_size)
+        
+        # Extract FOL triples
+        all_triples = []
+        for i, chunk in enumerate(chunks):
+            self.logger(f"Extracting from chunk {i+1}/{len(chunks)}...")
+            triples = self.fol_extractor.extract_triples(chunk)
+            all_triples.extend(triples)
+            time.sleep(1)  # Rate limiting
+        
+        # Write METTA file
+        metta_path = self.metta_writer.write_metta(
+            paper_info.title, all_triples, paper_info
+        )
+        
+        return {
+            'title': paper_info.title,
+            'triples': all_triples,
+            'count': len(all_triples),
+            'metta_file': metta_path,
+            'paper_info': paper_info
+        }
+    
+    def process_papers(self, query: str, max_papers: int = 3) -> Dict:
+        """Process multiple papers"""
+        papers = self.fetcher.fetch_papers(query, max_papers)
+        
+        if not papers:
+            self.logger("No papers found!")
+            return {}
+        
+        results = {}
+        for idx, paper in enumerate(papers, 1):
+            self.logger(f"Processing paper {idx}/{len(papers)}")
+            result = self.process_paper(paper)
+            results[paper.title] = result
+        
+        return results
