@@ -89,12 +89,15 @@ public abstract class InsertTask implements Runnable {
         } else if (this.writerType.equals("neo4j")) {  
             this.writer = new Neo4jCSVWriter(this.outputDir, this.jobId);  
         } else if (this.writerType.equals("networkx")) {  
+            // Get or create shared NetworkX writer from context  
+        this.writer = this.context.getWriter();  
+        if (this.writer == null) {  
             this.writer = new NetworkXWriter(this.outputDir, this.jobId);  
-        }
         
-        this.context.setWriter(this.writer);  
+        }  
+        this.context.setWriter(this.writer); 
 
-    }
+        }}
 
     public ElemType type() {
         return this.mapping.type();

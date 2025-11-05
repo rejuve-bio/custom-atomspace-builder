@@ -64,7 +64,7 @@ public final class LoadContext implements Serializable {
     this.writer = writer;  
     }  
     
-    public Writer writer() {  
+    public Writer getWriter() {  
         return this.writer;  
     }
 
