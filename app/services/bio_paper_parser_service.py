@@ -329,9 +329,9 @@ class CLI:
             formatter_class=argparse.RawDescriptionHelpFormatter,
             epilog="""
 Examples:
-  python bio_paper_parser.py --topic "cancer immunotherapy"
-  python bio_paper_parser.py --topic "CRISPR gene editing" --max-papers 5
-  python bio_paper_parser.py --paper-title "AlphaFold: Protein structure prediction"
+  python bio_paper_parser_service.py --topic "cancer immunotherapy"
+  python bio_paper_parser_service.py --topic "CRISPR gene editing" --max-papers 5
+  python bio_paper_parser_service.py --paper-title "AlphaFold: Protein structure prediction"
             """
         )
         
