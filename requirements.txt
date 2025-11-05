@@ -7,3 +7,6 @@ python-dotenv
 PyYAML
 neo4j
 pyjwt
+PyPDF2
+arxiv
+openai
