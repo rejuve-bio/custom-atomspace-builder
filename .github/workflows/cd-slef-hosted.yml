@@ -1,0 +1,86 @@
+name: CD pipeline for the custom-atomspace-builder
+
+on:
+  push:
+    branches:
+      - master
+      - develop
+      - 'feature/*'
+  pull_request:
+    branches:
+      - master
+      - develop
+      - 'feature/*'
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    
+    steps:
+      - name: Checkout current repository
+        uses: actions/checkout@v4
+          
+      - name: Debug environment
+        run: |
+          echo "Current user: $(whoami)"
+          echo "Home directory: $HOME"
+          echo "Working directory: $(pwd)"
+          echo "User ID: $(id -u)"
+          echo "Group ID: $(id -g)"
+          
+      - name: Checkout Ansible repository
+        uses: actions/checkout@v4
+        with:
+          repository: Abdu1964/ansible-deploy_v2.0
+          path: ansible-deploy_v2.0
+          
+      - name: Create dynamic inventory
+        run: |
+          cd ansible-deploy_v2.0
+          mkdir -p inventory
+          
+          # Get the actual username running the workflow
+          CURRENT_USER=$(whoami)
+          USER_HOME=$HOME
+          
+          cat > inventory/hosts.ini <<EOL
+          [Custom_Atomspace_builder_Remote]
+          localhost ansible_connection=local ansible_user=$CURRENT_USER ansible_become=false ansible_user_dir=$USER_HOME
+          EOL
+
+          echo "Inventory created for user: $CURRENT_USER"
+          cat inventory/hosts.ini
+          
+      - name: Ansible configuration
+        run: |
+          cd ansible-deploy_v2.0
+          # Ensure ansible uses the correct Python interpreter
+          cat > ansible.cfg <<EOL
+          [defaults]
+          interpreter_python = /usr/bin/python3
+          host_key_checking = False
+          inventory = inventory/hosts.ini
+          become = false
+          remote_user = $(whoami)
+          
+          [privilege_escalation]
+          become = false
+          become_method = sudo
+          become_user = root
+          become_ask_pass = false
+          EOL
+          
+      - name: Deploy with Ansible 
+        run: |
+          cd ansible-deploy_v2.0
+          echo "Running as user: $(whoami)"
+          echo "Home directory: $HOME"
+          
+          # Force the correct installation directory
+          ansible-playbook -i inventory/hosts.ini playbooks/deploy_server.yml \
+            --tags "Custom_Atomspace_builder_Remote" \
+            --tags "local_network" \
+            -e "install_dir=$HOME/services/custom-atomspace-builder" \
+            -e "ansible_user_id=$(whoami)" \
+            -e "ansible_user_dir=$HOME" \
+            -v
