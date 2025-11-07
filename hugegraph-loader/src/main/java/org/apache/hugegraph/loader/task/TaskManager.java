@@ -121,6 +121,7 @@ public final class TaskManager {
                 }    
             }    
         }
+        LOG.info("All the {} finished", tasksName);  
     }
 
     public void shutdown() {

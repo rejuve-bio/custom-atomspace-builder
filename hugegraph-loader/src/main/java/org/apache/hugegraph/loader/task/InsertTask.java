@@ -95,9 +95,9 @@ public abstract class InsertTask implements Runnable {
             this.writer = new NetworkXWriter(this.outputDir, this.jobId);  
         
         }  
+        }
         this.context.setWriter(this.writer); 
-
-        }}
+        }
 
     public ElemType type() {
         return this.mapping.type();
@@ -151,15 +151,6 @@ public abstract class InsertTask implements Runnable {
                                     // checkVertex);
             this.writer.writeEdges(batch);
         }
-    }
-    protected void finalizeWriter() {  
-        if (this.writerType.equals("networkx")) {  
-            try {  
-                ((NetworkXWriter) this.writer).writeGraph();  
-            } catch (Exception e) {  
-                throw new RuntimeException("Failed to finalize NetworkX writer", e);  
-            }  
-        }  
     }
 
     @SuppressWarnings("unchecked")
