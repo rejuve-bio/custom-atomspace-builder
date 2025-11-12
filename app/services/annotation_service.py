@@ -14,8 +14,7 @@ class AnnotationService:
     
     async def notify_annotation_service(self, job_id: str, writer_type: str) -> Optional[str]:
         """Notify the annotation service about a new job."""
-        if not self.service_url:  
-            return None 
+        if not self.service_url:
             print("Error: ANNOTATION_SERVICE_URL not configured")
             raise RuntimeError("Annotation service URL is not set")
         if writer_type == "neo4j":
