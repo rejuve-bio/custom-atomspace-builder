@@ -46,14 +46,14 @@ public abstract class InsertTask implements Runnable {
 
     public static final Set<String> UNACCEPTABLE_EXCEPTIONS = ImmutableSet.of(
             "class java.lang.IllegalArgumentException"
-    );
+            );
 
     public static final String[] UNACCEPTABLE_MESSAGES = {
-        // org.apache.http.conn.HttpHostConnectException
-        "Connection refused",
-        "The server is being shutting down",
-        "not allowed to insert, because already exist a vertex " +
-        "with same id and different label"
+            // org.apache.http.conn.HttpHostConnectException
+            "Connection refused",
+            "The server is being shutting down",
+            "not allowed to insert, because already exist a vertex " +
+                    "with same id and different label"
     };
 
     protected final LoadContext context;
@@ -66,7 +66,7 @@ public abstract class InsertTask implements Runnable {
     protected Writer writer;
 
     public InsertTask(LoadContext context, InputStruct struct,
-                      ElementMapping mapping, List<Record> batch) {
+            ElementMapping mapping, List<Record> batch) {
         assert batch != null;
         this.context = context;
         this.struct = struct;
@@ -76,28 +76,31 @@ public abstract class InsertTask implements Runnable {
         this.jobId = this.context.options().jobId;
         this.writerType = this.context.options().writerType;
 
-        if (!this.writerType.equals("metta") &&  
-            !this.writerType.equals("neo4j") &&  
-            !this.writerType.equals("mork") &&  
-            !this.writerType.equals("networkx")) {  
-            throw new IllegalArgumentException(  
-                "Unsupported writer type: " + this.writerType);  
+        if (!this.writerType.equals("metta") &&
+                !this.writerType.equals("neo4j") &&
+                !this.writerType.equals("mork") &&
+                !this.writerType.equals("networkx")) {
+            throw new IllegalArgumentException(
+                    "Unsupported writer type: " + this.writerType);
         }
 
-        if (this.writerType.equals("metta") || this.writerType.equals("mork")) {  
-            this.writer = new MeTTaWriter(this.outputDir, this.writerType);  
-        } else if (this.writerType.equals("neo4j")) {  
-            this.writer = new Neo4jCSVWriter(this.outputDir, this.jobId);  
-        } else if (this.writerType.equals("networkx")) {  
-            // Get or create shared NetworkX writer from context  
-        this.writer = this.context.getWriter();  
-        if (this.writer == null) {  
-            this.writer = new NetworkXWriter(this.outputDir, this.jobId);  
-        
-        }  
+        if (this.writerType.equals("metta") || this.writerType.equals("mork")) {
+            this.writer = new MeTTaWriter(this.outputDir, this.writerType);
+        } else if (this.writerType.equals("neo4j")) {
+            this.writer = new Neo4jCSVWriter(this.outputDir, this.jobId);
+        } else if (this.writerType.equals("networkx")) {
+            // Get or create shared NetworkX writer from context
+            this.writer = this.context.getWriter();
+            if (this.writer == null) {
+                this.writer = new NetworkXWriter(this.outputDir, this.jobId);
+                this.context.setWriter(this.writer);
+            } else if (!(this.writer instanceof NetworkXWriter)) {
+                throw new IllegalStateException(
+                        "Expected NetworkXWriter but found " + this.writer.getClass().getName() +
+                                ". Writer type mismatch for job.");
+            }
         }
-        this.context.setWriter(this.writer); 
-        }
+    }
 
     public ElemType type() {
         return this.mapping.type();
@@ -148,7 +151,7 @@ public abstract class InsertTask implements Runnable {
             this.writer.writeNodes(batch);
         } else {
             // client.graph().addEdges((List<Edge>) (Object) elements,
-                                    // checkVertex);
+            // checkVertex);
             this.writer.writeEdges(batch);
         }
     }
@@ -162,16 +165,16 @@ public abstract class InsertTask implements Runnable {
         if (this.type().isVertex()) {
             BatchVertexRequest.Builder req = new BatchVertexRequest.Builder();
             req.vertices((List<Vertex>) (Object) elements)
-                .updatingStrategies(this.mapping.updateStrategies())
-                .createIfNotExist(true);
+                    .updatingStrategies(this.mapping.updateStrategies())
+                    .createIfNotExist(true);
 
             client.graph().updateVertices(req.build());
         } else {
             BatchEdgeRequest.Builder req = new BatchEdgeRequest.Builder();
             req.edges((List<Edge>) (Object) elements)
-                .updatingStrategies(this.mapping.updateStrategies())
-                .checkVertex(checkVertex)
-                .createIfNotExist(true);
+                    .updatingStrategies(this.mapping.updateStrategies())
+                    .checkVertex(checkVertex)
+                    .createIfNotExist(true);
 
             client.graph().updateEdges(req.build());
         }
