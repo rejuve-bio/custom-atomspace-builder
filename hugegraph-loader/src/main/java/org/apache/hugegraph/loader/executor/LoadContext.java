@@ -35,6 +35,7 @@ import org.apache.hugegraph.loader.failure.FailLogger;
 import org.apache.hugegraph.loader.mapping.InputStruct;
 import org.apache.hugegraph.loader.metrics.LoadSummary;
 import org.apache.hugegraph.structure.constant.GraphMode;
+import org.apache.hugegraph.loader.writer.Writer;
 import org.apache.hugegraph.util.Log;
 
 public final class LoadContext implements Serializable {
@@ -57,6 +58,15 @@ public final class LoadContext implements Serializable {
 
     private final HugeClient client;
     private final SchemaCache schemaCache;
+    private Writer writer;
+
+    public void setWriter(Writer writer) {  
+    this.writer = writer;  
+    }  
+    
+    public Writer getWriter() {  
+        return this.writer;  
+    }
 
     public LoadContext(LoadOptions options) {
         this.timestamp = DateUtil.now("yyyyMMdd-HHmmss");

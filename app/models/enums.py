@@ -5,9 +5,10 @@ from enum import Enum
 
 class WriterType(str, Enum):
     """Supported writer types for graph generation."""
-    METTA = "metta"
-    NEO4J = "neo4j"
-    MORK = "mork"
+    METTA = "metta"  
+    NEO4J = "neo4j"  
+    MORK = "mork"  
+    NETWORKX = "networkx"
 
 
 class SessionStatus(str, Enum):
