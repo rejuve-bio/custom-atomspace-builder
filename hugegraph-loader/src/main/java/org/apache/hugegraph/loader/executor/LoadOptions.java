@@ -66,6 +66,11 @@ public class LoadOptions implements Serializable {
                          "allowed values are: metta, neo4j, or networkx")  
     public String writerType = "metta";
 
+    @Parameter(names = {"-gt", "--graph-type"}, arity = 1,
+           description = "Choose the graph type for networkx writer, " +
+                         "allowed values are: directed or undirected")
+    public String graphType = "directed";
+
     @Parameter(names = {"--job-id"}, arity = 1,
                description = "The job id of the load task, " +
                              "default is a random UUID")

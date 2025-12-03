@@ -34,6 +34,7 @@ async def load_data(
     config: str = Form(...),
     schema_json: str = Form(...),
     writer_type: str = Form("metta"),
+    graph_type: str = Form("directed"),
     session_id: str = Form(None),  # Made optional
     files: List[UploadFile] = File(None),  # Made optional
     webhook_url: str = Form(None),
@@ -121,7 +122,8 @@ async def load_data(
             files_dir=files_dir,
             config_data=config_data,
             schema_data=schema_data,
-            writer_type=writer_type
+            writer_type=writer_type,
+            graph_type=graph_type
         )
         
         job_id = response.job_id

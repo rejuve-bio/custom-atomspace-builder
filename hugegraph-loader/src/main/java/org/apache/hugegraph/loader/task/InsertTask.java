@@ -92,7 +92,7 @@ public abstract class InsertTask implements Runnable {
             // Get or create shared NetworkX writer from context
             this.writer = this.context.getWriter();
             if (this.writer == null) {
-                this.writer = new NetworkXWriter(this.outputDir, this.jobId);
+            this.writer = new NetworkXWriter(this.outputDir, this.jobId, this.context.options().graphType);  
                 this.context.setWriter(this.writer);
             } else if (!(this.writer instanceof NetworkXWriter)) {
                 throw new IllegalStateException(

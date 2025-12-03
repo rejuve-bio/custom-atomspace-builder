@@ -24,7 +24,8 @@ class HugeGraphService:
         files_dir: str,
         config_data: Dict[str, Any],
         schema_data: Dict[str, Any],
-        writer_type: str = WriterType.METTA
+        writer_type: str = WriterType.METTA,
+        graph_type: str = "directed"
     ) -> HugeGraphLoadResponse:
         """Process data using HugeGraph loader."""
         job_id = str(uuid.uuid4())
@@ -46,15 +47,14 @@ class HugeGraphService:
                 
                 # Run HugeGraph loader
                 result = self._run_hugegraph_loader(
-                    config_path, schema_path, output_dir, job_id, writer_type
-                )
+                    config_path, schema_path, output_dir, job_id, writer_type, graph_type)
                 
                 if result.returncode != 0:
                     self._cleanup_failed_job(output_dir)
                     raise Exception(f"HugeGraph loader failed: {result.stderr}")
                 
                 # Save additional metadata
-                self._save_job_metadata(output_dir, job_id, writer_type, schema_data)
+                self._save_job_metadata(output_dir, job_id, writer_type, schema_data, graph_type)
                 
                 output_files = self._get_output_files(output_dir)
                 if not output_files:
@@ -125,7 +125,8 @@ class HugeGraphService:
         schema_path: str, 
         output_dir: str, 
         job_id: str, 
-        writer_type: str
+        writer_type: str,
+        graph_type: str
     ) -> subprocess.CompletedProcess:
         """Execute HugeGraph loader command."""
         cmd = [
@@ -137,6 +138,7 @@ class HugeGraphService:
             "--clear-all-data", "true",
             "-o", output_dir,
             "-w", writer_type,
+            "-gt", graph_type,
             "--job-id", job_id
         ]
         
@@ -150,7 +152,8 @@ class HugeGraphService:
         output_dir: str, 
         job_id: str, 
         writer_type: str, 
-        schema_data: Dict[str, Any]
+        schema_data: Dict[str, Any],
+        graph_type: str
     ):
         """Save job metadata and schema to output directory."""
         # Save schema JSON
@@ -163,6 +166,7 @@ class HugeGraphService:
         job_metadata = {
             "job_id": job_id,
             "writer_type": writer_type,
+            "graph_type": graph_type,
             "created_at": str(datetime.now(tz=timezone.utc)),
             "neo4j_config": settings.neo4j_config if writer_type == WriterType.NEO4J else None
         }
