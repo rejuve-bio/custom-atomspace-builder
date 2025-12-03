@@ -20,6 +20,7 @@ public class NetworkXWriter implements Writer {
       
     private final String outputDir;  
     private final String jobId;  
+    private final String graphType;  
     private final Map<String, Integer> nodeMapping = new ConcurrentHashMap<>();  
     private final Map<String, Integer> nodeCounters = new ConcurrentHashMap<>();  
     private final Map<String, Integer> edgeCounters = new ConcurrentHashMap<>();  
@@ -27,9 +28,10 @@ public class NetworkXWriter implements Writer {
     private final List<Map<String, Object>> edges = Collections.synchronizedList(new ArrayList<>());  
     private int nodeIdCounter = 0;  
       
-    public NetworkXWriter(String outputDir, String jobId) {  
+    public NetworkXWriter(String outputDir, String jobId, String graphType) {  
         this.outputDir = outputDir;  
         this.jobId = jobId;  
+        this.graphType = graphType;  
           
         try {  
             Files.createDirectories(Paths.get(outputDir));  
@@ -109,7 +111,7 @@ public class NetworkXWriter implements Writer {
         ObjectMapper mapper = new ObjectMapper();  
         ObjectNode graphData = mapper.createObjectNode();  
           
-        graphData.put("directed", true);  
+        graphData.put("directed", "directed".equalsIgnoreCase(this.graphType));  
         graphData.put("multigraph", false);  
           
         ArrayNode nodesArray = mapper.createArrayNode();  
@@ -130,6 +132,7 @@ public class NetworkXWriter implements Writer {
           
         // Write metadata  
         ObjectNode metadata = mapper.createObjectNode();  
+        metadata.put("graph_type", this.graphType);
         metadata.put("node_count", nodes.size());  
         metadata.put("edge_count", edges.size());  
         metadata.set("node_counters", mapper.valueToTree(nodeCounters));  
@@ -148,7 +151,7 @@ public class NetworkXWriter implements Writer {
         System.out.println("Nodes: " + nodes.size() + ", Edges: " + edges.size());  
     }  
       
-    private void convertJsonToPickle(String jsonPath, String pklPath) throws IOException {  
+    protected void convertJsonToPickle(String jsonPath, String pklPath) throws IOException {  
         // Create inline Python script  
         String pythonScript = String.format(  
             "import json\n" +  
