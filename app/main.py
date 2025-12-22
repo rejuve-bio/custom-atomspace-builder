@@ -1,10 +1,20 @@
 import asyncio
+import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .config import settings
 from .core.database import neo4j_manager
+from .core.mongodb import connect_to_mongo, close_mongo_connection
 from .core.background_tasks import session_cleanup_worker
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger(__name__)
 
 # Import routers
 from .api.upload import router as upload_router
@@ -17,7 +27,19 @@ from .api.admin import router as admin_router
 async def lifespan(app: FastAPI):
     """Application lifespan management."""
     # Startup
-    print("Starting AtomSpace Builder API...")
+    logger.info("=" * 50)
+    logger.info("Starting AtomSpace Builder API...")
+    logger.info("=" * 50)
+    
+    # Initialize MongoDB connection 
+    try:
+        await connect_to_mongo()
+        logger.info("MongoDB connection established successfully!")
+    except Exception as e:
+        logger.critical("=" * 50)
+        logger.critical("CRITICAL ERROR: Failed to connect to MongoDB!")
+        logger.critical(f"Error details: {e}")
+        raise RuntimeError("MongoDB connection failed. Application cannot start.") from e
     
     # Initialize Neo4j connection
     neo4j_manager.initialize_driver()
@@ -25,12 +47,12 @@ async def lifespan(app: FastAPI):
     # Start background tasks
     cleanup_task = asyncio.create_task(session_cleanup_worker())
     
-    print("AtomSpace Builder API started successfully")
+    logger.info("AtomSpace Builder API started successfully")
     
     yield
     
     # Shutdown
-    print("Shutting down AtomSpace Builder API...")
+    logger.info("Shutting down AtomSpace Builder API...")
     
     # Cancel background tasks
     cleanup_task.cancel()
@@ -40,9 +62,10 @@ async def lifespan(app: FastAPI):
         pass
     
     # Close database connections
+    await close_mongo_connection()
     neo4j_manager.close_driver()
     
-    print("AtomSpace Builder API shutdown complete")
+    logger.info("AtomSpace Builder API shutdown complete")
 
 
 def create_app() -> FastAPI:

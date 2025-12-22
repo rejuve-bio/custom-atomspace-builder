@@ -13,6 +13,7 @@ from ..services.annotation_service import annotation_service
 from ..services.graph_info_service import graph_info_service
 from ..services.schema_suggestion_service import schema_suggestion_service
 from ..services.webhook_service import webhook_service
+from ..services.database_service import database_service
 from ..models.schemas import (
     HugeGraphLoadResponse, 
     JobSelectionRequest,
@@ -142,7 +143,7 @@ async def load_data(
         error_msg = await annotation_service.notify_annotation_service(job_id, writer_type)
         if error_msg:
             # Try to fallback to selected job
-            selected_job_id = get_job_id_to_use()
+            selected_job_id = await get_job_id_to_use()
             if selected_job_id:
                 await annotation_service.notify_annotation_service(selected_job_id, writer_type)
             
@@ -150,8 +151,8 @@ async def load_data(
         
         # Generate and save graph info
         graph_info = await graph_info_service.generate_graph_info(job_id, writer_type)
-        graph_info_service.save_graph_info(job_id, graph_info)
-        graph_info_service.save_selected_job_id(job_id)
+        await graph_info_service.save_graph_info(job_id, graph_info)
+        await graph_info_service.save_selected_job_id(job_id)
         
         # Update response message
         success_message = f"Graph generated successfully using {writer_type} writer"
@@ -225,7 +226,7 @@ async def suggest_schema(request: SuggestSchemaRequest):
 async def select_job(request: JobSelectionRequest):
     """Select a job as the current active job."""
     job_id = request.job_id
-    writer_type = get_writer_type_from_job(job_id)
+    writer_type = await get_writer_type_from_job(job_id)
     
     if not os.path.exists(graph_info_service.get_job_output_dir(job_id)):
         raise HTTPException(status_code=404, detail=f"Job ID {job_id} does not exist")
@@ -234,15 +235,15 @@ async def select_job(request: JobSelectionRequest):
     if error_msg:
         raise HTTPException(status_code=500, detail=f"Error connecting annotation service: {error_msg}")
     
-    graph_info_service.save_selected_job_id(job_id)
+    await graph_info_service.save_selected_job_id(job_id)
     return {"message": f"Job ID {job_id} selected successfully"}
 
 
 @router.get("/history", response_model=HistoryResponse)
 async def get_history():
     """Get job processing history."""
-    history = graph_info_service.get_history()
-    job_id = get_job_id_to_use()
+    history = await graph_info_service.get_history()
+    job_id = await get_job_id_to_use()
     history["selected_job_id"] = job_id if job_id else ""
     return history
 
@@ -291,14 +292,17 @@ async def convert_schema(schema_json: dict = None):
 @router.delete("/delete-job/{job_id}", response_model=DeleteJobResponse)
 async def delete_job(job_id: str):
     """Delete a job and its associated data."""
-    writer_type = get_writer_type_from_job(job_id)
+    writer_type = await get_writer_type_from_job(job_id)
 
     # Delete from Neo4j if applicable
     if writer_type == WriterType.NEO4J:
         neo4j_service.delete_subgraph(job_id)
     
     # Update history
-    updated_history, selected_job_affected = graph_info_service.delete_job_history(job_id)
+    updated_history, selected_job_affected = await graph_info_service.delete_job_history(job_id)
+    
+    # Delete job data from database
+    await database_service.delete_job(job_id)
     
     # Delete job directory
     job_dir = graph_info_service.get_job_output_dir(job_id)
@@ -332,7 +336,8 @@ async def delete_job(job_id: str):
         else:
             message_parts.append("selected job was reset")
     
-    updated_history["selected_job_id"] = get_job_id_to_use()
+    new_selected_job_id = await get_job_id_to_use()
+    updated_history["selected_job_id"] = new_selected_job_id if new_selected_job_id else ""
     
     return DeleteJobResponse(
         message=", ".join(message_parts),

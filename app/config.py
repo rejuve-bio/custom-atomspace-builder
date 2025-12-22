@@ -60,6 +60,10 @@ class Settings:
         self.llm_provider = os.getenv('LLM_PROVIDER', 'mock')
         self.llm_api_key = os.getenv('LLM_API_KEY')
         
+        # MongoDB settings
+        self.mongodb_uri = os.getenv('MONGODB_URI', 'mongodb://localhost:27017')
+        self.mongodb_database = os.getenv('MONGODB_DATABASE', 'atomspace_builder')
+        
         # CORS settings
         self.cors_allow_origins = self._config['cors']['allow_origins']
         self.cors_allow_credentials = self._config['cors']['allow_credentials']

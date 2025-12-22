@@ -28,20 +28,20 @@ async def get_graph_info(job_id: str = None):
     )
     
     try:
-        job_id = get_job_id_to_use(job_id)
+        job_id = await get_job_id_to_use(job_id)
         if not job_id:
             return empty_response
         
         # Try to get existing graph info
-        graph_info = graph_info_service.get_graph_info(job_id)
+        graph_info = await graph_info_service.get_graph_info(job_id)
         if graph_info:
             return graph_info
         
         # Generate new graph info if not found
-        writer_type = graph_info_service.get_writer_type_from_job(job_id)
+        writer_type = await graph_info_service.get_writer_type_from_job(job_id)
         if writer_type:
             graph_info = await graph_info_service.generate_graph_info(job_id, writer_type)
-            graph_info_service.save_graph_info(job_id, graph_info)
+            await graph_info_service.save_graph_info(job_id, graph_info)
             return graph_info
         
         return empty_response
@@ -58,17 +58,17 @@ async def get_annotation_schema(job_id: str = None):
     empty_response = AnnotationSchema(job_id="", nodes=[], edges=[])
     
     try:
-        job_id = get_job_id_to_use(job_id)
+        job_id = await get_job_id_to_use(job_id)
         if not job_id:
             return empty_response
         
         # Try to get existing annotation schema
-        annotation_schema = graph_info_service.get_annotation_schema(job_id)
+        annotation_schema = await graph_info_service.get_annotation_schema(job_id)
         if annotation_schema:
             return annotation_schema
         
         # Generate new annotation schema if not found
-        annotation_schema = graph_info_service.generate_annotation_schema(job_id)
+        annotation_schema = await graph_info_service.generate_annotation_schema(job_id)
         if annotation_schema:
             return annotation_schema
         

@@ -11,3 +11,5 @@ PyPDF2
 arxiv
 openai
 networkx>=3.0  
+pymongo
+motor

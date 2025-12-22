@@ -12,7 +12,7 @@ router = APIRouter(prefix="/api", tags=["admin"])
 @router.delete("/clear-history", response_model=HistoryResponse)
 async def clear_history_endpoint():
     """Clear all job history and output directories."""
-    history = graph_info_service.clear_history()
+    history = await graph_info_service.clear_history()
     return HistoryResponse(
         selected_job_id=history["selected_job_id"],
         history=history["history"]

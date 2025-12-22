@@ -4,10 +4,10 @@ import os
 from typing import Optional
 from fastapi import HTTPException
 from ..config import settings
-from ..utils.file_utils import get_latest_directory, load_json_file
+from ..utils.file_utils import get_latest_directory
 
 
-def get_job_id_to_use(job_id: Optional[str] = None) -> Optional[str]:
+async def get_job_id_to_use(job_id: Optional[str] = None) -> Optional[str]:
     """Get the job ID to use based on priority: provided -> selected -> latest."""
     from ..services.graph_info_service import graph_info_service
     
@@ -16,7 +16,7 @@ def get_job_id_to_use(job_id: Optional[str] = None) -> Optional[str]:
         return job_id
     
     # Use selected job if valid
-    selected_id = graph_info_service.get_selected_job_id()
+    selected_id = await graph_info_service.get_selected_job_id()
     if selected_id and os.path.exists(graph_info_service.get_job_output_dir(selected_id)):
         return selected_id
     
@@ -28,12 +28,12 @@ def get_job_id_to_use(job_id: Optional[str] = None) -> Optional[str]:
     return None
 
 
-def get_writer_type_from_job(job_id: str) -> str:
+async def get_writer_type_from_job(job_id: str) -> str:
     """Get writer type from job metadata with error handling."""
     from ..services.graph_info_service import graph_info_service
     
     try:
-        writer_type = graph_info_service.get_writer_type_from_job(job_id)
+        writer_type = await graph_info_service.get_writer_type_from_job(job_id)
         return writer_type if writer_type else "metta"
     except Exception as e:
         print(f"Error reading job metadata for {job_id}: {e}")

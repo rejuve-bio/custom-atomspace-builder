@@ -54,7 +54,10 @@ class HugeGraphService:
                     raise Exception(f"HugeGraph loader failed: {result.stderr}")
                 
                 # Save additional metadata
-                self._save_job_metadata(output_dir, job_id, writer_type, schema_data)
+                await self._save_job_metadata(output_dir, job_id, writer_type, schema_data)
+                
+                # Read graph_metadata.json created by Java loader and save to MongoDB
+                await self._save_graph_metadata_from_file(output_dir, job_id)
                 
                 output_files = self._get_output_files(output_dir)
                 if not output_files:
@@ -145,31 +148,33 @@ class HugeGraphService:
         
         return subprocess.run(cmd, capture_output=True, text=True)
     
-    def _save_job_metadata(
+    async def _save_job_metadata(
         self, 
         output_dir: str, 
         job_id: str, 
         writer_type: str, 
         schema_data: Dict[str, Any]
     ):
-        """Save job metadata and schema to output directory."""
-        # Save schema JSON
-        schema_json_path = os.path.join(output_dir, "schema.json")
-        with open(schema_json_path, "w") as f:
-            json.dump(schema_data, f, indent=2)
+        """Save job metadata and schema to database."""
+        from ..services.database_service import database_service
         
-        # Save job metadata
-        from datetime import datetime, timezone
-        job_metadata = {
-            "job_id": job_id,
-            "writer_type": writer_type,
-            "created_at": str(datetime.now(tz=timezone.utc)),
-            "neo4j_config": settings.neo4j_config if writer_type == WriterType.NEO4J else None
-        }
+        # Save schema to database
+        await database_service.save_schema(job_id, schema_data)
         
-        job_metadata_path = os.path.join(output_dir, "job_metadata.json")
-        with open(job_metadata_path, "w") as f:
-            json.dump(job_metadata, f, indent=2)
+        # Save job metadata to database
+        neo4j_config = settings.neo4j_config if writer_type == WriterType.NEO4J else None
+        await database_service.save_job_metadata(job_id, writer_type, neo4j_config)
+    
+    async def _save_graph_metadata_from_file(self, output_dir: str, job_id: str):
+        """Read graph_metadata.json from file system and save to MongoDB."""
+        from ..services.database_service import database_service
+        from ..utils.file_utils import load_json_file
+        
+        metadata_file = os.path.join(output_dir, "graph_metadata.json")
+        if os.path.exists(metadata_file):
+            metadata = load_json_file(metadata_file)
+            if metadata:
+                await database_service.save_graph_metadata(job_id, metadata)
     
     def _get_job_output_dir(self, job_id: str) -> str:
         """Get output directory path for a job."""
