@@ -11,7 +11,7 @@ LICENSE
 NOTICE
 
 # Development files
-; .env
+.env
 .env.local
 .env.development
 .env.test
