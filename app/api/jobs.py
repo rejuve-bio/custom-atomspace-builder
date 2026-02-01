@@ -13,6 +13,7 @@ from ..services.annotation_service import annotation_service
 from ..services.graph_info_service import graph_info_service
 from ..services.schema_suggestion_service import schema_suggestion_service
 from ..services.webhook_service import webhook_service
+from ..services.atomspace_service import atomspace_service
 from ..models.schemas import (
     HugeGraphLoadResponse, 
     JobSelectionRequest,
@@ -139,6 +140,17 @@ async def load_data(
                 neo4j_result_path = os.path.join(output_dir, "neo4j_load_result.json")
                 with open(neo4j_result_path, "w") as f:
                     json.dump(neo4j_load_result.dict(), f, indent=2)
+
+        # auto load to living AtomSpace if writer_type is metta
+        if writer_type == WriterType.METTA:
+            try:
+                metta_files = [f for f in os.listdir(output_dir) if f.endswith(".metta")]
+                for metta_file in metta_files:
+                    file_path = os.path.join(output_dir, metta_file)
+                    atomspace_service.load_metta_file(file_path)
+            except Exception as e:
+                # log error but don't fail the job for load fails
+                print(f"Warning: Failed to auto-load MeTTa files to AtomSpace: {e}")
         
         # Notify annotation service
         error_msg = await annotation_service.notify_annotation_service(job_id, writer_type)
