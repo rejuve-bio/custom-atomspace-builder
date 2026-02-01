@@ -10,4 +10,5 @@ pyjwt
 PyPDF2
 arxiv
 openai
-networkx>=3.0  
+networkx>=3.0
+hyperon

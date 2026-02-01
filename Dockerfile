@@ -38,7 +38,7 @@ COPY --from=builder /build/hugegraph-loader/apache-hugegraph-loader-incubating-1
 
 COPY app/ ./app/
 COPY config.yaml .
-COPY test_mork_integration.py .
+COPY verify_atomspace.py .
 
 RUN mkdir -p output uploads logs \
     && chmod +x /app/hugegraph-loader/bin/hugegraph-loader.sh

@@ -11,6 +11,7 @@ from .api.upload import router as upload_router
 from .api.jobs import router as jobs_router
 from .api.graph import router as graph_router
 from .api.admin import router as admin_router
+from .api.atomspace import router as atomspace_router
 
 
 @asynccontextmanager
@@ -68,6 +69,7 @@ def create_app() -> FastAPI:
     app.include_router(jobs_router)
     app.include_router(graph_router)
     app.include_router(admin_router)
+    app.include_router(atomspace_router)
     
     return app
 
