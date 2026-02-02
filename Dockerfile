@@ -6,11 +6,12 @@ WORKDIR /build
 COPY pom.xml .
 COPY hugegraph-loader/pom.xml hugegraph-loader/
 COPY hugegraph-client/pom.xml hugegraph-client/
-RUN mvn dependency:go-offline -pl hugegraph-client,hugegraph-loader -am
+COPY hugegraph-loader-custom/pom.xml hugegraph-loader-custom/
+RUN mvn dependency:go-offline -pl hugegraph-client,hugegraph-loader,hugegraph-loader-custom -am
 
 # Build
 COPY . .
-RUN mvn clean install -pl hugegraph-client,hugegraph-loader -am \
+RUN mvn clean install -pl hugegraph-client,hugegraph-loader,hugegraph-loader-custom -am \
     -Dmaven.javadoc.skip=true \
     -DskipTests \
     -Dcheckstyle.skip=true \

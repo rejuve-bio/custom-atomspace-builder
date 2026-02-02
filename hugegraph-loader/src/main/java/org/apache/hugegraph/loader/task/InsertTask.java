@@ -30,9 +30,6 @@ import org.apache.hugegraph.loader.mapping.ElementMapping;
 import org.apache.hugegraph.loader.mapping.InputStruct;
 import org.apache.hugegraph.loader.metrics.LoadMetrics;
 import org.apache.hugegraph.loader.metrics.LoadSummary;
-import org.apache.hugegraph.loader.writer.MeTTaWriter;
-import org.apache.hugegraph.loader.writer.NetworkXWriter;
-import org.apache.hugegraph.loader.writer.Neo4jCSVWriter;
 import org.apache.hugegraph.loader.writer.Writer;
 import org.apache.hugegraph.structure.GraphElement;
 import org.apache.hugegraph.structure.graph.BatchEdgeRequest;
@@ -85,16 +82,19 @@ public abstract class InsertTask implements Runnable {
         }
 
         if (this.writerType.equals("metta") || this.writerType.equals("mork")) {
-            this.writer = new MeTTaWriter(this.outputDir, this.writerType);
+            this.writer = createWriter("org.apache.hugegraph.loader.writer.custom.MeTTaWriter", 
+                                     this.outputDir, this.writerType);
         } else if (this.writerType.equals("neo4j")) {
-            this.writer = new Neo4jCSVWriter(this.outputDir, this.jobId);
+            this.writer = createWriter("org.apache.hugegraph.loader.writer.custom.Neo4jCSVWriter", 
+                                     this.outputDir, this.jobId);
         } else if (this.writerType.equals("networkx")) {
             // Get or create shared NetworkX writer from context
             this.writer = this.context.getWriter();
             if (this.writer == null) {
-            this.writer = new NetworkXWriter(this.outputDir, this.jobId, this.context.options().graphType);  
+                this.writer = createWriter("org.apache.hugegraph.loader.writer.custom.NetworkXWriter", 
+                                         this.outputDir, this.jobId, this.context.options().graphType);
                 this.context.setWriter(this.writer);
-            } else if (!(this.writer instanceof NetworkXWriter)) {
+            } else if (!this.writer.getClass().getName().contains("NetworkXWriter")) {
                 throw new IllegalStateException(
                         "Expected NetworkXWriter but found " + this.writer.getClass().getName() +
                                 ". Writer type mismatch for job.");
@@ -130,6 +130,20 @@ public abstract class InsertTask implements Runnable {
     }
 
     public abstract void execute();
+
+    private Writer createWriter(String className, Object... params) {
+        try {
+            Class<?> clazz = Class.forName(className);
+            for (java.lang.reflect.Constructor<?> constructor : clazz.getConstructors()) {
+                if (constructor.getParameterCount() == params.length) {
+                    return (Writer) constructor.newInstance(params);
+                }
+            }
+            throw new NoSuchMethodException("No suitable constructor found for " + className);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to instantiate custom writer via reflection: " + className, e);
+        }
+    }
 
     protected void plusLoadSuccess(int count) {
         LoadMetrics metrics = this.summary().metrics(this.struct);

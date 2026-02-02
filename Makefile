@@ -108,3 +108,15 @@ rebuild-dev:
 # Clean volumes in development mode (WARNING: deletes DB data)
 clean-dev:
 	docker-compose -f $(COMPOSE_FILE_DEV) down -v
+
+# --- Architectural Lead: Binary Dependency Tools ---
+# Build the standalone HugeGraph Loader binary (The "Senior Workflow")
+# This creates a distribution in hugegraph-loader/apache-hugegraph-loader-...
+package-loader:
+	@echo "Building proprietary writers and client modules..."
+	mvn clean install -pl hugegraph-client,hugegraph-loader-custom -am -DskipTests
+	@echo "Packaging standalone Loader binary..."
+	mvn package -pl hugegraph-loader -am -DskipTests
+	@echo ""
+	@echo "SUCCESS: Standalone binary created in hugegraph-loader/target/"
+	@echo "You can now take the .tar.gz and treat it as a pure Binary Dependency."
