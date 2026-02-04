@@ -1,4 +1,4 @@
-package org.apache.hugegraph.loader.writer;
+package org.apache.hugegraph.loader.writer.custom;
 
 import java.io.File;
 import java.io.IOException;
@@ -9,6 +9,7 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import org.apache.hugegraph.loader.writer.Writer;
 
 import org.apache.hugegraph.loader.builder.Record;
 import org.apache.hugegraph.structure.graph.Edge;
