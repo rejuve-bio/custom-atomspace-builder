@@ -108,3 +108,4 @@ rebuild-dev:
 # Clean volumes in development mode (WARNING: deletes DB data)
 clean-dev:
 	docker-compose -f $(COMPOSE_FILE_DEV) down -v
+
