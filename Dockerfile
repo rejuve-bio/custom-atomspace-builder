@@ -7,6 +7,8 @@ COPY hugegraph-loader/pom.xml hugegraph-loader/
 COPY hugegraph-client/pom.xml hugegraph-client/
 COPY hugegraph-loader-custom/pom.xml hugegraph-loader-custom/
 RUN mvn dependency:go-offline -pl hugegraph-client,hugegraph-loader,hugegraph-loader-custom -am
+COPY hugegraph-loader-custom/pom.xml hugegraph-loader-custom/
+RUN mvn dependency:go-offline -pl hugegraph-client,hugegraph-loader,hugegraph-loader-custom -am
 
 COPY . .
 RUN if [ -d "hugegraph-loader" ] && [ -f "hugegraph-loader/pom.xml" ]; then \
