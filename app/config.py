@@ -31,7 +31,8 @@ class Settings:
         """Load settings from environment variables."""
         self.api_port = int(os.getenv('API_PORT', 8000))
         # HugeGraph settings
-        self.hugegraph_loader_path = self._config['paths']['hugegraph_loader']
+        # Prioritize environment variable, fallback to config file
+        self.hugegraph_loader_path = os.getenv('HUGEGRAPH_LOADER_PATH', self._config['paths']['hugegraph_loader'])
         self.hugegraph_host = os.getenv('HUGEGRAPH_HOST', 'localhost')
         self.hugegraph_port = os.getenv('HUGEGRAPH_PORT', '8080')
         self.hugegraph_graph = os.getenv('HUGEGRAPH_GRAPH', 'hugegraph')

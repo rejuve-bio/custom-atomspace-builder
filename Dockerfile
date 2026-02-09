@@ -1,27 +1,4 @@
-# Multi-stage Dockerfile for AtomSpace Builder API with real HugeGraph build
-FROM maven:3.8-openjdk-17 AS hugegraph-builder
-
-WORKDIR /build
-
-# Copy the entire project (including hugegraph-loader source)
-COPY . .
-# Build HugeGraph Loader from source
-RUN if [ -d "hugegraph-loader" ] && [ -f "hugegraph-loader/pom.xml" ]; then \
-        echo "Building HugeGraph Loader from source..."; \
-        mvn clean install -pl hugegraph-client,hugegraph-loader -am \
-            -Dmaven.javadoc.skip=true \
-            -DskipTests\
-            -Dcheckstyle.skip=true \
-            -Deditorconfig.skip=true && \
-        echo "HugeGraph Loader built successfully"; \
-        ls -la hugegraph-loader/apache-hugegraph-loader-incubating-1.5.0/bin/; \
-    else \
-        echo "ERROR: hugegraph-loader source not found!"; \
-        echo "Available directories:"; ls -la; \
-        exit 1; \
-    fi
-
-# Python runtime stage
+# Multi-stage Dockerfile for AtomSpace Builder API
 FROM python:3.11-slim
 
 ENV PYTHONUNBUFFERED=1
@@ -42,25 +19,36 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the BUILT HugeGraph Loader from builder stage
-COPY --from=hugegraph-builder /build/hugegraph-loader/apache-hugegraph-loader-incubating-1.5.0 /app/hugegraph-loader/apache-hugegraph-loader-incubating-1.5.0
+# 1. Copy the frozen engine binary
+COPY binaries/apache-hugegraph-loader-incubating-1.5.0.tar.gz /tmp/engine.tar.gz
+
+# 2. Extract the engine
+RUN mkdir -p /app/hugegraph-loader && \
+    tar -xzf /tmp/engine.tar.gz -C /app/hugegraph-loader/ && \
+    rm /tmp/engine.tar.gz && \
+    mv /app/hugegraph-loader/apache-hugegraph-loader-incubating-1.5.0 /app/hugegraph-loader/current
+
+# 3. Inject the pre-built custom plugin JAR locally built
+COPY hugegraph-loader-custom/target/hugegraph-loader-custom-1.5.0.jar /app/hugegraph-loader/current/lib/
 
 # Copy application code
 COPY app/ ./app/
 COPY config.yaml .
+# Note: .env is usually mounted or passed as env vars, but copying for local dev convenience
 COPY .env .env
 
 # Create directories and set permissions
 RUN mkdir -p output uploads logs && \
+    find /app/hugegraph-loader -name "*.sh" -exec sed -i 's/\r$//' {} + && \
     find /app/hugegraph-loader -name "*.sh" -exec chmod +x {} \;
 
 # Environment variables with correct path
 ENV PYTHONPATH=/app
-ENV HUGEGRAPH_LOADER_PATH=/app/hugegraph-loader/apache-hugegraph-loader-incubating-1.5.0/bin/hugegraph-loader.sh
+ENV HUGEGRAPH_LOADER_PATH=/app/hugegraph-loader/current/bin/hugegraph-loader.sh
 
 # Verify the HugeGraph Loader is properly installed
 RUN echo "Verifying HugeGraph Loader installation..." && \
-    ls -la /app/hugegraph-loader/apache-hugegraph-loader-incubating-1.5.0/bin/ && \
+    ls -la /app/hugegraph-loader/current/bin/ && \
     echo "HugeGraph Loader path: $HUGEGRAPH_LOADER_PATH" && \
     test -f "$HUGEGRAPH_LOADER_PATH" && \
     echo "HugeGraph Loader verification successful"

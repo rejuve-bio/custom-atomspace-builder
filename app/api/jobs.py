@@ -140,15 +140,11 @@ async def load_data(
                 with open(neo4j_result_path, "w") as f:
                     json.dump(neo4j_load_result.dict(), f, indent=2)
         
-        # Notify annotation service
-        error_msg = await annotation_service.notify_annotation_service(job_id, writer_type)
-        if error_msg:
-            # Try to fallback to selected job
-            selected_job_id = get_job_id_to_use()
-            if selected_job_id:
-                await annotation_service.notify_annotation_service(selected_job_id, writer_type)
-            
-            raise HTTPException(status_code=500, detail={"message": error_msg, "job_id": job_id})
+        # Notify annotation service (Non-blocking warning)
+        annotation_error = await annotation_service.notify_annotation_service(job_id, writer_type)
+        if annotation_error:
+            print(f"Warning: Job {job_id} succeeded but annotation notification failed: {annotation_error}")
+            # Success response will proceed, but notification failure is logged
         
         # Generate and save graph info
         graph_info = await graph_info_service.generate_graph_info(job_id, writer_type)
@@ -232,9 +228,8 @@ async def select_job(request: JobSelectionRequest):
     if not os.path.exists(graph_info_service.get_job_output_dir(job_id)):
         raise HTTPException(status_code=404, detail=f"Job ID {job_id} does not exist")
     
-    error_msg = await annotation_service.notify_annotation_service(job_id, writer_type)
-    if error_msg:
-        raise HTTPException(status_code=500, detail=f"Error connecting annotation service: {error_msg}")
+    # Notify annotation service (Optional)
+    await annotation_service.notify_annotation_service(job_id, writer_type)
     
     graph_info_service.save_selected_job_id(job_id)
     return {"message": f"Job ID {job_id} selected successfully"}
