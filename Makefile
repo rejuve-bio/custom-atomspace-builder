@@ -108,31 +108,3 @@ rebuild-dev:
 # Clean volumes in development mode (WARNING: deletes DB data)
 clean-dev:
 	docker-compose -f $(COMPOSE_FILE_DEV) down -v
-
-
-
-
-# --- Binary Dependency Strategy Targets ---
-
-# ONE-TIME ACTION: Build the core engine binary at native Linux speed
-# This avoids the 3.5 hour I/O bottleneck by building in native WSL storage.
-freeze-engine-wsl:
-	@echo "Syncing source to native WSL (~/hugegraph-engine-freeze-build) securely..."
-	mkdir -p ~/hugegraph-engine-freeze-build
-	rsync -av --exclude='target' --exclude='.git' --exclude='venv' --exclude='node_modules' --exclude='binaries' . ~/hugegraph-engine-freeze-build/
-	@echo "Building core engine in WSL (Native Speed)..."
-	cd ~/hugegraph-engine-freeze-build && mvn clean install -pl hugegraph-client,hugegraph-loader -am -DskipTests -Dcheckstyle.skip=true -Drat.skip=true -Dmaven.javadoc.skip=true -Djacoco.skip=true -Deditorconfig.skip=true
-	@echo "Moving frozen binary back to project..."
-	mkdir -p binaries
-	cp ~/hugegraph-engine-freeze-build/hugegraph-loader/target/apache-hugegraph-loader-incubating-1.5.0.tar.gz binaries/
-	@echo "SUCCESS: Engine frozen and stored in binaries/"
-
-# Manual fallback for building on /mnt/c/ (Slow)
-freeze-engine:
-	mvn clean install -pl hugegraph-client,hugegraph-loader -am -DskipTests
-
-# Move manually built engine to binaries/ folder
-prep-binaries:
-	mkdir -p binaries
-	cp hugegraph-loader/target/apache-hugegraph-loader-incubating-1.5.0.tar.gz binaries/
-	@echo "Engine binary moved to binaries/ successfully."
