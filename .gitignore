@@ -82,7 +82,7 @@ output/
 *.war
 *.zip
 *.tar
-*.tar.gz*
+/binaries/*.tar.gz
 tree.txt
 *.versionsBackup
 .flattened-pom.xml
@@ -121,7 +121,8 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+/hugegraph-loader-custom/lib/*.jar
+/hugegraph-loader/
 lib64/
 parts/
 sdist/
