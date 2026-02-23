@@ -75,8 +75,8 @@ services:
       test: ["CMD-SHELL", "cypher-shell -u ${NEO4J_USERNAME:-neo4j} -p ${NEO4J_PASSWORD:-atomspace123} 'RETURN 1;'"]
       interval: 20s
       timeout: 30s
-      retries: 10
-      start_period: 600s
+      retries: 5
+      start_period: 60s
 
   hugegraph:
     image: hugegraph/hugegraph:1.5.0
