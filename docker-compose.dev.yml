@@ -73,10 +73,10 @@ services:
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "cypher-shell -u ${NEO4J_USERNAME:-neo4j} -p ${NEO4J_PASSWORD:-atomspace123} 'RETURN 1;'"]
-      interval: 10s
-      timeout: 10s
+      interval: 20s
+      timeout: 30s
       retries: 5
-      start_period: 30s
+      start_period: 60s
 
   hugegraph:
     image: hugegraph/hugegraph:1.5.0
