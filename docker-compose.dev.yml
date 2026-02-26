@@ -72,11 +72,12 @@ services:
       - atomspace-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "cypher-shell -u ${NEO4J_USERNAME:-neo4j} -p ${NEO4J_PASSWORD:-atomspace123} 'RETURN 1;'"]
-      interval: 20s
-      timeout: 30s
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:${NEO4J_HTTP_PORT:-7474} || exit 1"] 
+      # test: ["CMD-SHELL", "cypher-shell -u ${NEO4J_USERNAME:-neo4j} -p ${NEO4J_PASSWORD:-atomspace123} 'RETURN 1;'"]
+      interval: 10s
+      timeout: 5s
       retries: 5
-      start_period: 60s
+      start_period: 3s
 
   hugegraph:
     image: hugegraph/hugegraph:1.5.0
