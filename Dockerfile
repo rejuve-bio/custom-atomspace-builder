@@ -1,7 +1,7 @@
 FROM alpine:latest AS binary-fetcher
 RUN apk add --no-cache curl tar
 
-ARG ENGINE_URL="https://github.com/natnaellT/custom-atomspace-builder/releases/download/v1.5.0-binaries/apache-hugegraph-loader-incubating-1.5.0.tar.gz"
+ARG ENGINE_URL="https://github.com/rejuve-bio/custom-atomspace-builder/releases/download/v1.0.0/apache-hugegraph-loader-incubating-1.5.0.tar.gz"
 WORKDIR /downloads
 RUN curl -L ${ENGINE_URL} -o engine.tar.gz
 
